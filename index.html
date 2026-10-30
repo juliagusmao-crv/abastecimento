@@ -343,8 +343,8 @@ img{max-width:100%}
 
   <!-- FRENTES E FROTAS -->
   <div class="tab" id="tab-frotas" hidden>
-    <div class="admin-grid">
-      <section class="panel">
+    <div class="admin-grid" id="frotas-grid">
+      <section class="panel" id="painel-frentes">
         <h2>Frentes</h2>
         <form id="form-f" class="mini-form" novalidate>
           <div class="row">
@@ -376,8 +376,9 @@ img{max-width:100%}
     <section class="panel">
       <div class="panel-head"><h2>Frotas cadastradas</h2><span class="hint" id="frotas-count"></span></div>
       <div id="list-v"></div>
+      <div id="list-v-ret"></div>
     </section>
-    <section class="panel">
+    <section class="panel" id="painel-importar">
       <div class="panel-head"><h2>Importar dados</h2><span class="hint">Use uma vez, para trazer as frentes, frotas e lançamentos do site antigo</span></div>
       <div class="lote-foot"><input type="file" id="imp-arq" accept=".json,application/json" style="width:auto"><button class="btn-primary" id="btn-importar" type="button">Importar arquivo</button></div>
       <p class="msg" id="msg-imp" role="status"></p>
@@ -474,12 +475,12 @@ img{max-width:100%}
   function iniciarOuvintes(){
     pararOuvintes();
     ouvintes.push(db.collection('frentes').onSnapshot(s=>{ S.frentes=s.docs.map(d=>{ const x=d.data(); return {...x,id:d.id,nome:String(x.nome||''),fazenda:x.fazenda==null?'':String(x.fazenda),responsavel:x.responsavel||''}; }); S.vivo=new Date(); render(); },erroOuvinte));
-    ouvintes.push(db.collection('frotas').onSnapshot(s=>{ S.frotas=s.docs.map(d=>{ const x=d.data(); return {...x,id:d.id,codigo:String(x.codigo),modelo:x.modelo==null?'':String(x.modelo),frenteId:String(x.frenteId||'')}; }); render(); },erroOuvinte));
+    ouvintes.push(db.collection('frotas').onSnapshot(s=>{ S.frotasTodas=s.docs.map(d=>{ const x=d.data(); return {...x,id:d.id,codigo:String(x.codigo),modelo:x.modelo==null?'':String(x.modelo),frenteId:String(x.frenteId||'')}; }); S.frotas=S.frotasTodas.filter(v=>!v.retirada); render(); },erroOuvinte));
     if(ehAdmin()) ouvintes.push(db.collection('usuarios').onSnapshot(s=>{ S.usuarios=s.docs.map(d=>({...d.data(),id:d.id})); render(); },erroOuvinte));
     ouvirRegistros(); ouvirAlteracoes();
   }
   async function carregar(){ ouvirRegistros(); render(); }
-  function sair(aviso){ pararOuvintes(); S.sessao=null; S.frentes=[]; S.frotas=[]; S.leituras=[]; S.todas=[]; S.alteracoes=[]; S.usuarios=[]; S.aviso=aviso||'';
+  function sair(aviso){ pararOuvintes(); S.sessao=null; S.frentes=[]; S.frotas=[]; S.frotasTodas=[]; S.leituras=[]; S.todas=[]; S.alteracoes=[]; S.usuarios=[]; S.aviso=aviso||'';
     $('#gate-body').innerHTML=''; $('#lote').innerHTML=''; S.loteChave=''; try{ auth&&auth.signOut(); }catch(_){} render(); }
 
   // ---- operações no banco (mesmos nomes usados pelas telas) ----
@@ -508,7 +509,7 @@ img{max-width:100%}
   // Corrige um lançamento. O valor anterior fica guardado no próprio lançamento (edicoes) e no Registro de alterações.
   async function editarLanc(id, novo, motivo){
     const l=(S.todas||[]).find(x=>x.id===id); if(!l) throw new Error('Lançamento não encontrado. Atualize a página.');
-    const v=S.frotas.find(x=>x.id===l.frotaId);
+    const v=(S.frotasTodas||S.frotas).find(x=>x.id===l.frotaId);
     const pct=Number(String(novo.pct).replace(',','.'));
     if(String(novo.pct).trim()===''||!(pct>=0&&pct<=100)||!Number.isInteger(pct)) throw new Error('A porcentagem precisa ser um número inteiro de 0 a 100.');
     const hS=String(novo.horimetro??'').trim(); let hor=null;
@@ -543,6 +544,31 @@ img{max-width:100%}
       t.update(ref,{itens});
       registrarAlteracao(t,{tipo:anular?'anulacao':'reativacao',lancId:id,frotaId:l.frotaId,antes:resumoLanc(l),motivo:String(motivo||'')});
     });
+  }
+  async function salvarFrota(o){
+    const codigo=String(o.codigo||'').trim(), frenteId=o.frenteId;
+    if(!codigo||!frenteId) throw new Error('Informe o número da frota e a frente.');
+    if(S.frotas.some(v=>String(v.codigo).toLowerCase()===codigo.toLowerCase())) throw new Error('Essa frota já está cadastrada.');
+    const ret=(S.frotasTodas||[]).find(v=>v.retirada&&String(v.codigo).toLowerCase()===codigo.toLowerCase());
+    const id=ret?ret.id:'v-'+codigo.replace(/[^A-Za-z0-9]/g,''), agora=new Date().toISOString(), b=db.batch(), f=S.frentes.find(x=>x.id===frenteId);
+    b.set(db.collection('frotas').doc(id),{codigo,tipo:o.tipo==='Colhedora'?'Colhedora':'Trator',modelo:String(o.modelo||'').trim(),frenteId,retirada:false,
+      alteradaPor:S.sessao.nome,alteradaEm:agora},{merge:true});
+    b.set(db.collection('alteracoes').doc(),{tipo:ret?'frota_reativada':'frota_adicionada',frotaId:id,frente:f?f.nome:'',depois:`${o.tipo} ${codigo} · ${f?f.nome:''}`,...autor(),em:agora});
+    await b.commit(); return {id,reativada:!!ret};
+  }
+  async function retirarFrota(id, retirar){
+    const v=(S.frotasTodas||[]).find(x=>x.id===id); if(!v) return;
+    const agora=new Date().toISOString(), b=db.batch(), f=S.frentes.find(x=>x.id===v.frenteId);
+    b.update(db.collection('frotas').doc(id), retirar?{retirada:true,retiradaPor:S.sessao.nome,retiradaEm:agora}:{retirada:false,alteradaPor:S.sessao.nome,alteradaEm:agora});
+    b.set(db.collection('alteracoes').doc(),{tipo:retirar?'frota_retirada':'frota_reativada',frotaId:id,frente:f?f.nome:'',antes:`${v.tipo} ${v.codigo} · ${f?f.nome:''}`,...autor(),em:agora});
+    await b.commit();
+  }
+  async function moverFrota(id, frenteId){
+    const v=(S.frotasTodas||[]).find(x=>x.id===id); if(!v||v.frenteId===frenteId) return;
+    const agora=new Date().toISOString(), b=db.batch(), de=S.frentes.find(x=>x.id===v.frenteId), para=S.frentes.find(x=>x.id===frenteId);
+    b.update(db.collection('frotas').doc(id),{frenteId,alteradaPor:S.sessao.nome,alteradaEm:agora});
+    b.set(db.collection('alteracoes').doc(),{tipo:'frota_frente',frotaId:id,frente:para?para.nome:'',antes:de?de.nome:'',depois:para?para.nome:'',...autor(),em:agora});
+    await b.commit();
   }
   async function alterarFazenda(frenteId, fazenda){
     const f=S.frentes.find(x=>x.id===frenteId); if(!f) return;
@@ -610,7 +636,7 @@ img{max-width:100%}
     const frenteId=$('#r-frente').value, de=$('#r-de').value, ate=$('#r-ate').value;
     const fMap={}; S.frentes.forEach(f=>fMap[f.id]=f);
     const nomeF = v => (fMap[v.frenteId]||{}).nome||'';
-    const frotas=S.frotas.filter(v=>!frenteId||v.frenteId===frenteId)
+    const frotas=(S.frotasTodas||S.frotas).filter(v=>!frenteId||v.frenteId===frenteId)
       .sort((a,b)=>nomeF(a).localeCompare(nomeF(b),'pt-BR',{numeric:true})||(a.tipo===b.tipo?0:a.tipo==='Colhedora'?-1:1)||byCode(a,b));
     const inP = iso => { const d=localDay(iso); return (!de||d>=de)&&(!ate||d<=ate); };
     const linhas=[], maquinas=[];
@@ -626,7 +652,7 @@ img{max-width:100%}
         prev=l;
       });
       const last=ls[ls.length-1], atual=last?Number(last.pct):null, consumo=hc>0?queda/hc:null;
-      maquinas.push({v,f:fMap[v.frenteId],atual,hor:last?last.horimetro:null,consumo,autonomia:consumo&&atual!=null?atual/consumo:null,horas,abast,ultima:last});
+      if(!v.retirada) maquinas.push({v,f:fMap[v.frenteId],atual,hor:last?last.horimetro:null,consumo,autonomia:consumo&&atual!=null?atual/consumo:null,horas,abast,ultima:last});
     });
     linhas.sort((a,b)=>(a.quando||'').localeCompare(b.quando||''));
     const rotulo = de&&ate ? `${fmtD(de)} a ${fmtD(ate)}` : de ? `a partir de ${fmtD(de)}` : ate ? `até ${fmtD(ate)}` : 'todo o período';
@@ -636,7 +662,7 @@ img{max-width:100%}
   // ---- abas ----
   function abas(){
     const t=[{id:'geral',nome:'Visão geral'},{id:'lancar',nome:'Lançar informações'},{id:'consumo',nome:'Consumo e histórico'}];
-    if(ehAdmin()) t.push({id:'frotas',nome:'Frentes e frotas'},{id:'usuarios',nome:'Usuários'});
+    t.push({id:'frotas',nome:ehAdmin()?'Frentes e frotas':'Frotas'}); if(ehAdmin()) t.push({id:'usuarios',nome:'Usuários'});
     return t;
   }
   function abaAtual(){ const h=(location.hash||'').slice(1); const t=abas(); return t.some(x=>x.id===h)?h:'geral'; }
@@ -671,7 +697,7 @@ img{max-width:100%}
     const u=ultimas();
     const frentes=[...S.frentes].sort(byNome);
     const fMap={}; frentes.forEach(f=>fMap[f.id]=f);
-    const vMap={}; S.frotas.forEach(v=>vMap[v.id]=v);
+    const vMap={}; (S.frotasTodas||S.frotas).forEach(v=>vMap[v.id]=v);
 
     // selects
     const sel=$('#l-frota'), sv=sel.value;
@@ -759,9 +785,9 @@ img{max-width:100%}
         <div class="machines">${ms.map(card).join('')}</div></section>`; }).join('')
       : `<div class="empty box">Nenhuma frota ${R.frente?'nesta frente':'cadastrada'}.</div>`;
     const adm=ehAdmin();
-    const anulados=(S.todas||[]).filter(l=>l.anulado&&(()=>{ const v=S.frotas.find(x=>x.id===l.frotaId); if(!v||(R.frente&&v.frenteId!==R.frente)) return false;
+    const anulados=(S.todas||[]).filter(l=>l.anulado&&(()=>{ const v=(S.frotasTodas||S.frotas).find(x=>x.id===l.frotaId); if(!v||(R.frente&&v.frenteId!==R.frente)) return false;
       const d=localDay(l.quando), de=$('#r-de').value, ate=$('#r-ate').value; return (!de||d>=de)&&(!ate||d<=ate); })())
-      .map(l=>{ const v=S.frotas.find(x=>x.id===l.frotaId); return {...l,v,f:S.frentes.find(f=>f.id===v.frenteId),dp:undefined,dh:null}; });
+      .map(l=>{ const v=(S.frotasTodas||S.frotas).find(x=>x.id===l.frotaId); return {...l,v,f:S.frentes.find(f=>f.id===v.frenteId),dp:undefined,dh:null}; });
     const hist=[...R.linhas,...anulados].sort((a,b)=>(b.quando||'').localeCompare(a.quando||'')||(b.lancadoEm||'').localeCompare(a.lancadoEm||''));
     S.histLim=S.histLim||100;
     const vis=hist.slice(0,S.histLim);
@@ -793,6 +819,8 @@ img{max-width:100%}
   }
 
   function renderFrotas(frentes,u){
+    const adm=ehAdmin(); $('#painel-frentes').hidden=!adm; $('#painel-importar').hidden=!adm;
+    $('#frotas-grid').style.gridTemplateColumns = adm ? '' : 'minmax(0,1fr)';
     $('#list-f').innerHTML = frentes.length ? frentes.map(f=>{ const n=S.frotas.filter(v=>v.frenteId===f.id).length;
       const faz = S.editFaz===f.id
         ? `<span class="inline-edit"><input type="text" id="faz-${esc(f.id)}" value="${esc(f.fazenda||'')}" placeholder="Fazenda" aria-label="Fazenda da ${esc(f.nome)}"><input type="text" id="resp-${esc(f.id)}" value="${esc(f.responsavel||'')}" placeholder="Responsável" aria-label="Responsável da ${esc(f.nome)}"><button class="btn-primary btn-sm" data-savefaz="${esc(f.id)}" type="button">Salvar</button><button class="btn-ghost btn-sm" data-cancel type="button">Cancelar</button></span>`
@@ -806,12 +834,15 @@ img{max-width:100%}
     $('#frotas-count').textContent = vs.length?`${vs.length} frota(s)`:'';
     $('#list-v').innerHTML = vs.length ? `<div class="table-wrap boxed"><table><thead><tr><th>Frota</th><th>Equipamento</th><th>Modelo</th><th>Frente</th><th>Última informação</th><th></th></tr></thead><tbody>${vs.map(v=>{ const l=u[v.id];
       const act = S.confirm==='v:'+v.id
-        ? `<span class="confirm"><span class="hint">O histórico dela some dos relatórios.</span><button class="btn-danger" data-delv="${esc(v.id)}" type="button">Retirar frota</button><button class="btn-ghost" data-cancel type="button">Cancelar</button></span>`
+        ? `<span class="confirm"><span class="hint">Sai das listas; o histórico continua guardado.</span><button class="btn-danger" data-delv="${esc(v.id)}" type="button">Retirar frota</button><button class="btn-ghost" data-cancel type="button">Cancelar</button></span>`
         : `<button class="btn-link" data-ask="v:${esc(v.id)}" type="button">Retirar</button>`;
       return `<tr><td><span class="code">${esc(v.codigo)}</span>${v.exemplo?' <span class="tag ex">exemplo</span>':''}</td><td><span class="tag ${v.tipo==='Colhedora'?'col':''}">${esc(v.tipo)}</span></td><td>${esc(v.modelo||'')}</td>
         <td><select data-mover="${esc(v.id)}" aria-label="Frente da frota ${esc(v.codigo)}" style="width:auto;padding:4px 6px;font-size:.88rem">${frentes.map(o=>`<option value="${esc(o.id)}"${o.id===v.frenteId?' selected':''}>${esc(o.nome)}</option>`).join('')}</select></td>
         <td class="num">${l?Math.round(l.pct)+'% · '+quando(l.quando):'–'}</td><td class="r">${act}</td></tr>`; }).join('')}</tbody></table></div>`
       : '<div class="empty box">Nenhuma frota cadastrada.</div>';
+    const ret=(S.frotasTodas||[]).filter(v=>v.retirada).sort(byCode);
+    $('#list-v-ret').innerHTML = ret.length ? `<details style="margin-top:12px"><summary class="hint" style="cursor:pointer">Frotas retiradas (${ret.length})</summary>
+      <div class="mlist" style="margin-top:8px">${ret.map(v=>`<div class="it"><span><b>${esc(v.codigo)}</b> · ${esc(v.tipo)} ${esc(v.modelo||'')} <span class="hint" style="display:inline">· retirada por ${esc(v.retiradaPor||'')} em ${quando(v.retiradaEm)}</span></span><button class="btn-link edit" data-reatv="${esc(v.id)}" type="button">Reativar</button></div>`).join('')}</div></details>` : '';
   }
 
   // ---- Importar mensagem de combustível (texto do WhatsApp) ----
@@ -1055,14 +1086,15 @@ img{max-width:100%}
       return `<tr class="${l.anulado?'anulado':''}"><td class="num"><b>${quando(l.quando)}</b>${l.anulado?' <span class="chip anul">anulado</span>':(l.edicoes&&l.edicoes.length)?' <span class="chip edit">corrigido</span>':''}</td><td class="num hint">${lanc(l)}</td><td><b>${esc(nomeInfo(l))}</b></td><td>${esc(nomeUsuario(l))}</td><td>${f?esc(f.nome):'–'}</td><td>${v?esc(v.codigo):'(retirada)'}</td><td class="r num">${Math.round(l.pct)}%</td><td class="r num">${l.horimetro!=null?nf1.format(l.horimetro):'–'}</td></tr>`; }).join('')}</tbody></table></div>`
       +(atTodas.length>at.length?`<div class="mais"><button class="btn-ghost" id="btn-at-mais" type="button">Mostrar mais (${atTodas.length-at.length} restantes)</button></div>`:'')
       : '<div class="empty box">Nenhum lançamento ainda.</div>';
-    const fN=id=>{ const v=S.frotas.find(x=>x.id===id); return v?v.codigo:'?'; };
+    const fN=id=>{ const v=(S.frotasTodas||S.frotas).find(x=>x.id===id); return v?v.codigo:'?'; };
     const vtxt=x=>x?`${x.pct!=null?Math.round(x.pct)+'%':''}${x.horimetro!=null?' · '+nf1.format(x.horimetro)+' h':''}${x.quando?' · '+quando(x.quando):''}${x.responsavel?' · '+esc(x.responsavel):''}`:'';
-    const TIPO={correcao:'Correção',anulacao:'Anulação',reativacao:'Reativação',fazenda:'Fazenda'};
+    const TIPO={correcao:'Correção',anulacao:'Anulação',reativacao:'Reativação',fazenda:'Fazenda',frota_adicionada:'Frota adicionada',frota_retirada:'Frota retirada',frota_reativada:'Frota reativada',frota_frente:'Frota mudou de frente'};
+    const txtFrota=a=>a.tipo.startsWith('frota_');
     S.altLim=S.altLim||100; const alt=(S.alteracoes||[]).slice(0,S.altLim);
     $('#alteracoes').innerHTML = alt.length ? `<div class="table-wrap boxed"><table><thead><tr><th>Quando</th><th>Usuário</th><th>Tipo</th><th>Onde</th><th>Antes</th><th>Depois</th><th>Motivo</th></tr></thead><tbody>${alt.map(a=>`<tr>
-        <td class="num">${quando(a.em)}</td><td><b>${esc(a.usuario||'')}</b></td><td><span class="chip ${a.tipo==='anulacao'?'anul':'edit'}">${TIPO[a.tipo]||esc(a.tipo)}</span></td>
+        <td class="num">${quando(a.em)}</td><td><b>${esc(a.usuario||'')}</b></td><td><span class="chip ${a.tipo==='anulacao'||a.tipo==='frota_retirada'?'anul':'edit'}">${TIPO[a.tipo]||esc(a.tipo)}</span></td>
         <td>${a.tipo==='fazenda'?esc(a.frente||''):'Frota '+esc(fN(a.frotaId))}</td>
-        <td class="obs">${a.tipo==='fazenda'?esc(a.antes||'(vazio)'):vtxt(a.antes)}</td><td class="obs">${a.tipo==='fazenda'?esc(a.depois||'(vazio)'):a.tipo==='correcao'?vtxt(a.depois):'–'}</td><td class="obs">${esc(a.motivo||'')}</td></tr>`).join('')}</tbody></table></div>
+        <td class="obs">${a.tipo==='fazenda'||txtFrota(a)?esc(a.antes||'–'):vtxt(a.antes)}</td><td class="obs">${a.tipo==='fazenda'||txtFrota(a)?esc(a.depois||'–'):a.tipo==='correcao'?vtxt(a.depois):'–'}</td><td class="obs">${esc(a.motivo||'')}</td></tr>`).join('')}</tbody></table></div>
       ${(S.alteracoes||[]).length>alt.length?`<div class="mais"><button class="btn-ghost" id="btn-alt-mais" type="button">Mostrar mais (${S.alteracoes.length-alt.length} restantes)</button></div>`:''}`
       : '<div class="empty box">Nenhuma alteração feita até agora.</div>';
   }
@@ -1074,7 +1106,7 @@ img{max-width:100%}
     const fr=id?frenteDaFrota(id):null;
     if(id!==S.respFrota){ S.respFrota=id;
       // sugere o último responsável lançado na frente (cobre folguista), senão o cadastrado
-      const ultResp = fr ? S.leituras.filter(l=>{ const v=S.frotas.find(x=>x.id===l.frotaId); return v&&v.frenteId===fr.id&&l.responsavel; })
+      const ultResp = fr ? S.leituras.filter(l=>{ const v=(S.frotasTodas||S.frotas).find(x=>x.id===l.frotaId); return v&&v.frenteId===fr.id&&l.responsavel; })
         .sort((a,b)=>(b.quando||'').localeCompare(a.quando||''))[0] : null;
       $('#l-resp').value = ultResp ? ultResp.responsavel : (fr&&fr.responsavel) || ''; }
     if(!id){ h.textContent='Escolha a frota para ver a última informação.'; return; }
@@ -1169,8 +1201,8 @@ img{max-width:100%}
     const R=relatorio(), adm=ehAdmin();
     const cab=['Horário informado','Lançado no site','Frente','Fazenda','Frota','Equipamento','Modelo','% combustível','Variação (p.p.)','Abastecida','Horímetro (h)','Horas desde a anterior','Responsável pela informação','Situação','Corrigido por','Corrigido em','Valor antes da correção','Motivo'].concat(adm?['Usuário que lançou','Origem']:[]);
     const de=$('#r-de').value, ate=$('#r-ate').value;
-    const anul=(S.todas||[]).filter(l=>{ if(!l.anulado) return false; const v=S.frotas.find(x=>x.id===l.frotaId); if(!v||(R.frente&&v.frenteId!==R.frente)) return false; const d=localDay(l.quando); return (!de||d>=de)&&(!ate||d<=ate); })
-      .map(l=>{ const v=S.frotas.find(x=>x.id===l.frotaId); return {...l,v,f:S.frentes.find(f=>f.id===v.frenteId),dp:null,dh:null}; });
+    const anul=(S.todas||[]).filter(l=>{ if(!l.anulado) return false; const v=(S.frotasTodas||S.frotas).find(x=>x.id===l.frotaId); if(!v||(R.frente&&v.frenteId!==R.frente)) return false; const d=localDay(l.quando); return (!de||d>=de)&&(!ate||d<=ate); })
+      .map(l=>{ const v=(S.frotasTodas||S.frotas).find(x=>x.id===l.frotaId); return {...l,v,f:S.frentes.find(f=>f.id===v.frenteId),dp:null,dh:null}; });
     const linhas=[...R.linhas,...anul].sort((a,b)=>(a.quando||'').localeCompare(b.quando||''));
     const ult=l=>{ const e=l.edicoes||[]; return e[e.length-1]||null; };
     const ant=a=>a?`${Math.round(a.pct)}%${a.horimetro!=null?' · '+a.horimetro+' h':''} · ${quando(a.quando)} · ${a.responsavel||''}`:'';
@@ -1321,14 +1353,14 @@ img{max-width:100%}
     const codigo=$('#v-cod').value.trim(), frenteId=$('#v-frente').value;
     if(!codigo||!frenteId){ msg.className='msg err'; msg.textContent='Informe o número da frota e a frente.'; return; }
     if(S.frotas.some(v=>String(v.codigo).toLowerCase()===codigo.toLowerCase())){ msg.className='msg err'; msg.textContent='Essa frota já está cadastrada.'; return; }
-    try{ await mudar('salvar','frotas',{id:'v-'+codigo.replace(/[^A-Za-z0-9]/g,''),codigo,tipo:$('#v-tipo').value,modelo:$('#v-mod').value.trim(),frenteId}); msg.textContent=`Frota ${codigo} adicionada.`; $('#v-cod').value=''; $('#v-mod').value=''; }
+    try{ const r=await salvarFrota({codigo,tipo:$('#v-tipo').value,modelo:$('#v-mod').value,frenteId}); msg.textContent=r.reativada?`Frota ${codigo} reativada, com o histórico dela.`:`Frota ${codigo} adicionada.`; $('#v-cod').value=''; $('#v-mod').value=''; }
     catch(err){ msg.className='msg err'; msg.textContent=erroTxt(err); }
   });
 
   const falhou = err => { const m=$('#msg-usu')&&!$('#tab-usuarios').hidden?$('#msg-usu'):$('#msg-pdf'); if(m){ m.className='msg err'; m.textContent=erroTxt(err); } render(); };
   document.addEventListener('change', async e=>{
     const t=e.target, d=t.dataset||{};
-    if(d.mover){ try{ await mudar('salvar','frotas',{id:d.mover,frenteId:t.value}); }catch(err){ falhou(err); } }
+    if(d.mover){ try{ await moverFrota(d.mover,t.value); }catch(err){ falhou(err); } }
     if(d.funcao){ try{ await mudar('salvarUsuario',{id:d.funcao,funcao:t.value}); }catch(err){ falhou(err); } }
   });
 
@@ -1342,7 +1374,8 @@ img{max-width:100%}
     else if(d.editfaz){ S.editFaz=d.editfaz; render(); const i=document.getElementById('faz-'+d.editfaz); if(i) i.focus(); }
     else if(d.savefaz){ const i=document.getElementById('faz-'+d.savefaz), j=document.getElementById('resp-'+d.savefaz);
       const v=i?i.value.trim():'', r=j?j.value.trim():''; S.editFaz=null; try{ await mudar('salvar','frentes',{id:d.savefaz,fazenda:v,responsavel:r}); }catch(err){ falhou(err); } }
-    else if(d.delv){ S.confirm=null; try{ await mudar('excluir','frotas',d.delv); }catch(err){ falhou(err); } }
+    else if(d.delv){ S.confirm=null; try{ await retirarFrota(d.delv,true); }catch(err){ falhou(err); } render(); }
+    else if(d.reatv){ try{ await retirarFrota(d.reatv,false); }catch(err){ falhou(err); } render(); }
     else if(d.editar){ S.confirm=null; S.editando=d.editar; render(); const i=document.querySelector(`tr[data-ed="${d.editar}"] .ed-pct`); if(i){ i.focus(); i.select(); } }
     else if(d.edsalvar){ const tr=document.querySelector(`tr[data-ed="${d.edsalvar}"]`), m=tr.querySelector('[data-edmsg]'); t.disabled=true;
       try{ await editarLanc(d.edsalvar,{pct:tr.querySelector('.ed-pct').value,horimetro:tr.querySelector('.ed-hor').value,quando:tr.querySelector('.ed-quando').value,responsavel:tr.querySelector('.ed-resp').value},tr.querySelector('.ed-motivo').value);

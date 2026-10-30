@@ -25,7 +25,12 @@ service cloud.firestore {
       allow update: if ativo() && request.resource.data.diff(resource.data).affectedKeys()
                       .hasOnly(['fazenda', 'fazendaAlteradaPor', 'fazendaAlteradaEm']);
     }
-    match /frotas/{id}  { allow read: if ativo(); allow write: if admin(); }
+    // qualquer usuário ativo adiciona, retira (fica guardada como retirada) ou muda a frota de frente
+    match /frotas/{id} {
+      allow read: if ativo();
+      allow create, update: if ativo();
+      allow delete: if admin();
+    }
     match /registros/{id} {
       allow read: if ativo();
       allow create, update: if ativo();
