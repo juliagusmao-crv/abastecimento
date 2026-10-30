@@ -866,7 +866,7 @@ img{max-width:100%}
     if(pS==='') st.push({nivel:'erro',msg:'sem porcentagem'});
     else { const p=Number(pS); if(!isFinite(p)||p<0||p>100) st.push({nivel:'erro',msg:'porcentagem fora de 0 a 100'}); else if(!Number.isInteger(p)) st.push({nivel:'erro',msg:'porcentagem deve ser número inteiro'}); }
     const hS=String(l.hor).trim();
-    if(hS===''){ if(!v||v.tipo==='Colhedora') st.push({nivel:'erro',msg:'sem horímetro'}); else st.push({nivel:'alerta',msg:'sem horímetro (opcional no trator)'}); }
+    if(hS===''){ if(!v||v.tipo==='Colhedora') st.push({nivel:'erro',msg:'sem horímetro'}); }
     else { const h=lerHorimetro(hS);
       if(!h) st.push({nivel:'erro',msg:'horímetro inválido'});
       else {
