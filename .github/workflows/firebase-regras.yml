@@ -1,0 +1,41 @@
+# Publica as regras do banco (firestore.rules) no Firebase sempre que elas mudam no repositório.
+# Usa dois segredos do repositório (Settings › Secrets and variables › Actions):
+#   FIREBASE_SERVICE_ACCOUNT  = conteúdo do arquivo .json da chave da conta de serviço do Firebase
+#   ADMIN_EMAIL               = e-mail da administradora, em minúsculas
+name: Publicar regras do Firebase
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - firestore.rules
+      - firebase.json
+      - .github/workflows/firebase-regras.yml
+  workflow_dispatch:
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Colocar o e-mail da administradora nas regras
+        env:
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+        run: |
+          if [ -z "$ADMIN_EMAIL" ]; then echo "Falta o segredo ADMIN_EMAIL"; exit 1; fi
+          sed -i "s/EMAIL_DA_ADMINISTRADORA/$(echo "$ADMIN_EMAIL" | tr 'A-Z' 'a-z')/" firestore.rules
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Publicar no Firebase
+        env:
+          CHAVE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$CHAVE" ]; then echo "Falta o segredo FIREBASE_SERVICE_ACCOUNT"; exit 1; fi
+          printf '%s' "$CHAVE" > "$RUNNER_TEMP/chave.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/chave.json"
+          npx -y firebase-tools@13 deploy --only firestore:rules --project abastecimento-crv --non-interactive
+          rm -f "$RUNNER_TEMP/chave.json"

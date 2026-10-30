@@ -41,3 +41,12 @@ Hospedado no **GitHub Pages**; login com e-mail e senha e banco de dados no **Fi
 ## Atualizar o site depois
 
 Para trocar o `index.html` por uma versão nova: no GitHub, abra o arquivo › ícone de lápis ou **Add file › Upload files** › envie o arquivo novo › **Commit changes**. Em 1 ou 2 minutos o site atualiza. Os dados ficam no Firebase e não são afetados.
+
+## Regras do banco publicadas automaticamente
+
+O arquivo `.github/workflows/firebase-regras.yml` publica o `firestore.rules` no Firebase sempre que ele muda na branch `main`
+(ou manualmente em **Actions › Publicar regras do Firebase › Run workflow**). Ele precisa de dois segredos do repositório
+(**Settings › Secrets and variables › Actions**):
+
+- `FIREBASE_SERVICE_ACCOUNT`: conteúdo do arquivo .json gerado em Firebase › Configurações do projeto › Contas de serviço › Gerar nova chave privada.
+- `ADMIN_EMAIL`: e-mail da administradora, em minúsculas. Ele entra no lugar de `EMAIL_DA_ADMINISTRADORA` só na hora de publicar, e não fica salvo no repositório.

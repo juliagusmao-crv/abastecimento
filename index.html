@@ -83,6 +83,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .msg.err{color:var(--crit)}
 .notice{padding:10px 14px;border-radius:var(--r);background:var(--accent-soft);border:1px solid var(--accent);font-size:.92rem;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;display:grid;gap:14px;min-width:0}
+.panel{grid-template-columns:minmax(0,1fr)}
 .panel-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .tab{display:grid;gap:18px;grid-template-columns:minmax(0,1fr)}
 .wrap{grid-template-columns:minmax(0,1fr)}
@@ -172,10 +173,28 @@ td .code{font-family:var(--f-display);font-weight:700;font-size:1.15rem}
 .lote-t input::placeholder{font-family:var(--f-body);font-size:.85rem}
 .lote-t td.ult{color:var(--muted);font-size:.85rem;white-space:nowrap}
 .lote-t input{padding:4px 8px;width:126px;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
-.lote input.bad{border-color:var(--crit);background:var(--crit-soft)}
+.lote input.bad,#imp-panel input.bad{border-color:var(--crit);background:var(--crit-soft)}
 .lote-t tr.salvo td{background:var(--ok-soft)}
 .lote-t tr.sep td{background:var(--surface-2);font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:5px 12px}
 .lote-foot{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.imp-t input[type=checkbox]{width:20px;height:20px;padding:0}
+.imp-t input.cod{width:96px}
+.imp-t td.st{white-space:normal;min-width:220px}
+.st-pill{display:inline-block;font-size:.8rem;font-weight:700;border-radius:999px;padding:2px 9px;margin:2px 4px 2px 0}
+.st-ok{background:var(--ok-soft);color:var(--ok)}
+.st-alerta{background:var(--warn-soft);color:var(--fg)}
+.st-erro{background:var(--crit-soft);color:var(--crit)}
+.imp-t tr.off td{opacity:.5}
+.chip.edit{background:var(--warn-soft);color:var(--fg)}
+.chip.anul{background:var(--crit-soft);color:var(--crit)}
+tr.anulado td{text-decoration:line-through;text-decoration-color:var(--crit);opacity:.6}
+tr.anulado td.acoes,tr.anulado td.obs{text-decoration:none;opacity:1}
+.obs-edit{font-size:.78rem;color:var(--muted);white-space:normal;line-height:1.3;margin-top:2px;font-family:var(--f-body)}
+tr.editando td{background:var(--accent-soft)}
+tr.editando input{padding:4px 6px;width:96px;font-family:var(--f-mono)}
+tr.editando input.w-hora{width:150px} tr.editando input.w-resp{width:140px;font-family:var(--f-body)}
+.mais{display:flex;justify-content:center;margin-top:10px}
+.aviso-imp{font-size:.88rem;padding:8px 12px;border-radius:8px;background:var(--warn-soft)}
 @media (max-width:620px){.lote-top{grid-template-columns:1fr 1fr}.lote-top .resp{grid-column:1/-1}.lote-t input{width:84px}}
 .machines{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
 .mcard{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:grid;gap:8px;background:var(--surface)}
@@ -248,6 +267,7 @@ img{max-width:100%}
   <div class="toolbar" id="toolbar" hidden>
     <div class="filters">
       <label for="r-frente">Frente<select id="r-frente"><option value="">Todas as frentes</option></select></label>
+      <button class="btn-ghost btn-sm per" id="btn-todo-periodo" type="button" style="align-self:end">Todo o período</button>
       <label for="r-de" class="per">De<input type="date" id="r-de"></label>
       <label for="r-ate" class="per">Até<input type="date" id="r-ate"></label>
     </div>
@@ -284,9 +304,25 @@ img{max-width:100%}
   <!-- LANÇAR INFORMAÇÕES -->
   <div class="tab" id="tab-lancar" hidden>
     <section class="panel">
-      <div class="panel-head"><h2>Lançar informações</h2><button class="btn-primary" id="btn-salvar-tudo" type="button">Salvar todas as frentes</button></div>
+      <div class="panel-head"><h2>Lançar informações</h2><span style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn-ghost" id="btn-imp-abrir" type="button">Importar mensagem</button><button class="btn-primary" id="btn-salvar-tudo" type="button">Salvar todas as frentes</button></span></div>
       <p class="hint">Preencha como uma planilha: digite a % de cada frota (e o horímetro das colhedoras) e salve. Só as linhas com % preenchida são salvas. <b>Enter</b> ou as setas ↑ ↓ passam para a frota de cima ou de baixo. Nos tratores o horímetro é opcional.</p>
       <p class="msg" id="msg-tudo" role="status"></p>
+    </section>
+    <section class="panel" id="imp-panel" hidden>
+      <div class="panel-head"><h2>Importar mensagem de combustível</h2><button class="btn-link" id="btn-imp-fechar" type="button">Fechar</button></div>
+      <p class="hint">Cole a mensagem recebida no WhatsApp (blocos com FROTA, PORCENTAGEM e HORÍMETRO) e clique em <b>Interpretar</b>. Nada é salvo antes de você conferir e clicar em <b>Salvar</b>.</p>
+      <label for="imp-texto">Mensagem<textarea id="imp-texto" rows="12" placeholder="INFORMAÇÕES SOBRE COMBUSTÍVEL !!&#10;&#10;FROTA: 62520&#10;PORCENTAGEM: 60%&#10;HORIMÊTRO: 8385.5" style="font:14px/1.45 var(--f-mono);width:100%;border:1px solid var(--line);border-radius:7px;padding:10px;background:var(--surface);color:var(--fg);resize:vertical"></textarea></label>
+      <div class="lote-top">
+        <label>Data informada<input type="date" id="imp-data"></label>
+        <label>Hora informada<input type="time" id="imp-hora"></label>
+        <label class="resp">Responsável pela frente<input type="text" id="imp-resp" placeholder="Quem passou a informação"></label>
+      </div>
+      <div class="lote-foot"><button class="btn-primary" id="btn-imp-interpretar" type="button">Interpretar</button><span class="msg" id="msg-imp-ler" role="status"></span></div>
+      <div id="imp-prev" hidden>
+        <div class="table-wrap boxed"><table class="lote-t imp-t"><thead><tr><th>Salvar</th><th>Frota</th><th>Equipamento</th><th>Nível (%)</th><th>Horímetro</th><th>Situação</th></tr></thead><tbody id="imp-linhas"></tbody></table></div>
+        <div id="imp-avisos" style="display:grid;gap:6px;margin-top:10px"></div>
+        <div class="lote-foot" style="margin-top:12px"><button class="btn-primary" id="btn-imp-salvar" type="button">Salvar</button><button class="btn-ghost" id="btn-imp-cancelar" type="button">Cancelar</button><span class="msg" id="msg-imp-salvar" role="status"></span></div>
+      </div>
     </section>
     <div id="lote" style="display:grid;gap:18px"></div>
   </div>
@@ -373,8 +409,12 @@ img{max-width:100%}
       <p class="foot-note"><b>Monitoramento</b> lança % de combustível e horímetro. <b>Administrador</b> também cria frentes, altera a fazenda e adiciona ou retira frotas.</p>
     </section>
     <section class="panel">
-      <div class="panel-head"><h2>Responsáveis pelas informações</h2><span class="hint">Últimas 30 informações lançadas</span></div>
+      <div class="panel-head"><h2>Responsáveis pelas informações</h2><span class="hint">Todos os lançamentos, do mais recente ao mais antigo</span></div>
       <div id="atividade"></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Registro de alterações</h2><span class="hint">Correções, anulações e mudanças de fazenda feitas por qualquer usuário. Não pode ser apagado.</span></div>
+      <div id="alteracoes"></div>
     </section>
   </div>
 </div>
@@ -394,7 +434,7 @@ img{max-width:100%}
   const localDay = iso => { const d=new Date(iso); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); };
   const hojeStr = () => localDay(new Date().toISOString());
   const fmtD = s => s ? s.split('-').reverse().join('/') : '';
-  $('#r-ate').value = hojeStr(); $('#r-de').value = hojeStr().slice(0,8)+'01';
+  $('#r-ate').value = hojeStr(); { const d=new Date(); d.setDate(d.getDate()-30); $('#r-de').value = localDay(d.toISOString()); }
 
   // ---- login e banco de dados (Firebase) ----
   const cfg = window.FIREBASE_CONFIG || {};
@@ -416,25 +456,30 @@ img{max-width:100%}
   const paraEmail = u => { u=normUsuario(u); return u.includes('@') ? u : u+'@'+DOMINIO; };
   const mostrarLogin = p => p.usuario || (String(p.email||'').endsWith('@'+DOMINIO) ? String(p.email).split('@')[0] : (p.email||''));
   const mesDe = iso => localDay(iso).slice(0,7);
-  function mesCorte(){ const d=new Date(); d.setMonth(d.getMonth()-4); let m=d.getFullYear()+'-'+pad(d.getMonth()+1); const de=$('#r-de').value; if(de && de.slice(0,7)<m) m=de.slice(0,7); return m; }
-  let ouvintes=[], regUnsub=null, mesOuvido=null;
+  let ouvintes=[], regUnsub=null, altUnsub=null;
   const erroOuvinte = () => { S.vivo=null; render(); };
   function ouvirRegistros(){
-    if(!db||!S.sessao) return; const m=mesCorte(); if(m===mesOuvido) return; mesOuvido=m; if(regUnsub) regUnsub();
-    regUnsub=db.collection('registros').where('mes','>=',m).onSnapshot(s=>{ const out=[];
+    if(!db||!S.sessao||regUnsub) return;
+    // todo o histórico, sem corte de data (cada documento guarda um mês de uma frota)
+    regUnsub=db.collection('registros').onSnapshot(s=>{ const out=[];
       s.forEach(d=>{ const x=d.data(); (x.itens||[]).forEach(it=>out.push({...it,id:String(it.id),frotaId:String(x.frotaId),doc:d.id,pct:Number(it.pct),
-        horimetro:(it.horimetro===''||it.horimetro==null)?null:Number(it.horimetro),responsavel:it.responsavel||'',usuario:it.usuario||it.informante||''})); });
-      S.leituras=out; S.vivo=new Date(); render(); }, erroOuvinte); }
-  function pararOuvintes(){ ouvintes.forEach(f=>f()); ouvintes=[]; if(regUnsub) regUnsub(); regUnsub=null; mesOuvido=null; }
+        horimetro:(it.horimetro===''||it.horimetro==null)?null:Number(it.horimetro),responsavel:it.responsavel||'',usuario:it.usuario||it.informante||'',
+        edicoes:Array.isArray(it.edicoes)?it.edicoes:[]})); });
+      S.todas=out; S.leituras=out.filter(l=>!l.anulado); S.vivo=new Date(); render(); }, erroOuvinte); }
+  function ouvirAlteracoes(){
+    if(!db||!ehAdmin()||altUnsub) return;
+    altUnsub=db.collection('alteracoes').onSnapshot(s=>{ S.alteracoes=s.docs.map(d=>({...d.data(),id:d.id})).sort((a,b)=>String(b.em||'').localeCompare(String(a.em||''))); render(); },()=>{});
+  }
+  function pararOuvintes(){ ouvintes.forEach(f=>f()); ouvintes=[]; if(regUnsub) regUnsub(); regUnsub=null; if(altUnsub) altUnsub(); altUnsub=null; }
   function iniciarOuvintes(){
     pararOuvintes();
     ouvintes.push(db.collection('frentes').onSnapshot(s=>{ S.frentes=s.docs.map(d=>{ const x=d.data(); return {...x,id:d.id,nome:String(x.nome||''),fazenda:x.fazenda==null?'':String(x.fazenda),responsavel:x.responsavel||''}; }); S.vivo=new Date(); render(); },erroOuvinte));
     ouvintes.push(db.collection('frotas').onSnapshot(s=>{ S.frotas=s.docs.map(d=>{ const x=d.data(); return {...x,id:d.id,codigo:String(x.codigo),modelo:x.modelo==null?'':String(x.modelo),frenteId:String(x.frenteId||'')}; }); render(); },erroOuvinte));
     if(ehAdmin()) ouvintes.push(db.collection('usuarios').onSnapshot(s=>{ S.usuarios=s.docs.map(d=>({...d.data(),id:d.id})); render(); },erroOuvinte));
-    ouvirRegistros();
+    ouvirRegistros(); ouvirAlteracoes();
   }
   async function carregar(){ ouvirRegistros(); render(); }
-  function sair(aviso){ pararOuvintes(); S.sessao=null; S.frentes=[]; S.frotas=[]; S.leituras=[]; S.usuarios=[]; S.aviso=aviso||'';
+  function sair(aviso){ pararOuvintes(); S.sessao=null; S.frentes=[]; S.frotas=[]; S.leituras=[]; S.todas=[]; S.alteracoes=[]; S.usuarios=[]; S.aviso=aviso||'';
     $('#gate-body').innerHTML=''; $('#lote').innerHTML=''; S.loteChave=''; try{ auth&&auth.signOut(); }catch(_){} render(); }
 
   // ---- operações no banco (mesmos nomes usados pelas telas) ----
@@ -449,18 +494,63 @@ img{max-width:100%}
     return {id:uid(),pct,horimetro:temHor?Number(item.horimetro):null,responsavel:String(item.responsavel).trim().slice(0,80),
       quando:q.toISOString(),lancadoEm:agora,usuarioId:S.sessao.id,usuario:S.sessao.nome};
   }
-  async function lancarLote(itens){
+  async function lancarLote(itens,extra){
     if(!itens.length) throw new Error('Preencha a % de pelo menos uma frota.');
-    const agora=new Date().toISOString(), es=itens.map(i=>({frotaId:i.frotaId,e:prepararLanc(i,agora)}));
+    const agora=new Date().toISOString(), es=itens.map(i=>({frotaId:i.frotaId,e:Object.assign(prepararLanc(i,agora),extra||{})}));
     for(let k=0;k<es.length;k+=400){ const b=db.batch();
       es.slice(k,k+400).forEach(({frotaId,e})=>{ const mes=mesDe(e.quando); b.set(db.collection('registros').doc(frotaId+'_'+mes),{frotaId,mes,itens:FV.arrayUnion(e)},{merge:true}); });
       await b.commit(); }
     return es.map(x=>x.e);
   }
-  async function delLanc(id){
-    const l=S.leituras.find(x=>x.id===id); if(!l) return;
-    const ref=db.collection('registros').doc(l.doc);
-    await db.runTransaction(async t=>{ const s=await t.get(ref); if(!s.exists) return; t.update(ref,{itens:(s.data().itens||[]).filter(x=>String(x.id)!==String(id))}); });
+  const autor = () => ({usuarioId:S.sessao.id, usuario:S.sessao.nome});
+  const resumoLanc = l => ({pct:Number(l.pct), horimetro:(l.horimetro===''||l.horimetro==null)?null:Number(l.horimetro), quando:l.quando, responsavel:l.responsavel||''});
+  function registrarAlteracao(t, dados){ t.set(db.collection('alteracoes').doc(), {...dados, ...autor(), em:new Date().toISOString()}); }
+  // Corrige um lançamento. O valor anterior fica guardado no próprio lançamento (edicoes) e no Registro de alterações.
+  async function editarLanc(id, novo, motivo){
+    const l=(S.todas||[]).find(x=>x.id===id); if(!l) throw new Error('Lançamento não encontrado. Atualize a página.');
+    const v=S.frotas.find(x=>x.id===l.frotaId);
+    const pct=Number(String(novo.pct).replace(',','.'));
+    if(String(novo.pct).trim()===''||!(pct>=0&&pct<=100)||!Number.isInteger(pct)) throw new Error('A porcentagem precisa ser um número inteiro de 0 a 100.');
+    const hS=String(novo.horimetro??'').trim(); let hor=null;
+    if(hS!==''){ const h=lerHorimetro(hS); if(!h) throw new Error('Horímetro inválido.'); hor=h.valor; }
+    if(v&&v.tipo==='Colhedora'&&hor==null) throw new Error('Informe o horímetro da colhedora.');
+    const q=new Date(novo.quando); if(!novo.quando||isNaN(q)) throw new Error('Informe a data e a hora informadas.');
+    if(q.getTime()>Date.now()+10*6e4) throw new Error('O horário informado está no futuro.');
+    const resp=String(novo.responsavel||'').trim(); if(!resp) throw new Error('Informe o responsável pela frente.');
+    const depois={pct,horimetro:hor,quando:q.toISOString(),responsavel:resp.slice(0,80)};
+    const antes=resumoLanc(l);
+    if(JSON.stringify(antes)===JSON.stringify(depois)) throw new Error('Nada foi alterado.');
+    const refAntigo=db.collection('registros').doc(l.doc), mesNovo=mesDe(depois.quando), refNovo=db.collection('registros').doc(l.frotaId+'_'+mesNovo);
+    const agora=new Date().toISOString(), ed={em:agora,...autor(),antes,motivo:String(motivo||'').trim().slice(0,200)};
+    await db.runTransaction(async t=>{
+      const sA=await t.get(refAntigo); const itensA=sA.exists?(sA.data().itens||[]):[];
+      const i=itensA.findIndex(x=>String(x.id)===String(id)); if(i<0) throw new Error('Esse lançamento foi alterado por outra pessoa. Atualize a página e tente de novo.');
+      const atual=itensA[i], novoItem={...atual,...depois,editadoEm:agora,editadoPor:S.sessao.nome,editadoPorId:S.sessao.id,edicoes:[...(atual.edicoes||[]),ed]};
+      if(refNovo.path===refAntigo.path){ itensA[i]=novoItem; t.update(refAntigo,{itens:itensA}); }
+      else { const sN=await t.get(refNovo); itensA.splice(i,1); t.update(refAntigo,{itens:itensA});
+        t.set(refNovo,{frotaId:l.frotaId,mes:mesNovo,itens:[...(sN.exists?(sN.data().itens||[]):[]),novoItem]},{merge:true}); }
+      registrarAlteracao(t,{tipo:'correcao',lancId:id,frotaId:l.frotaId,antes,depois,motivo:ed.motivo});
+    });
+  }
+  // "Anular" não apaga: o lançamento continua no histórico, riscado, e sai dos cálculos.
+  async function anularLanc(id, anular, motivo){
+    const l=(S.todas||[]).find(x=>x.id===id); if(!l) return;
+    const ref=db.collection('registros').doc(l.doc), agora=new Date().toISOString();
+    await db.runTransaction(async t=>{
+      const s=await t.get(ref); const itens=s.exists?(s.data().itens||[]):[]; const i=itens.findIndex(x=>String(x.id)===String(id)); if(i<0) return;
+      itens[i]= anular ? {...itens[i],anulado:true,anuladoEm:agora,anuladoPor:S.sessao.nome,anuladoPorId:S.sessao.id,motivoAnulacao:String(motivo||'').slice(0,200)}
+                       : (()=>{ const x={...itens[i]}; delete x.anulado; x.reativadoEm=agora; x.reativadoPor=S.sessao.nome; return x; })();
+      t.update(ref,{itens});
+      registrarAlteracao(t,{tipo:anular?'anulacao':'reativacao',lancId:id,frotaId:l.frotaId,antes:resumoLanc(l),motivo:String(motivo||'')});
+    });
+  }
+  async function alterarFazenda(frenteId, fazenda){
+    const f=S.frentes.find(x=>x.id===frenteId); if(!f) return;
+    if((f.fazenda||'')===fazenda) return;
+    const agora=new Date().toISOString(), b=db.batch();
+    b.update(db.collection('frentes').doc(frenteId),{fazenda,fazendaAlteradaPor:S.sessao.nome,fazendaAlteradaEm:agora});
+    b.set(db.collection('alteracoes').doc(),{tipo:'fazenda',frenteId,frente:f.nome,antes:f.fazenda||'',depois:fazenda,...autor(),em:agora});
+    await b.commit();
   }
   async function criarUsuario(o){
     const nome=String(o.nome||'').trim(), usuario=normUsuario(o.email), senha=String(o.senha||'');
@@ -487,7 +577,7 @@ img{max-width:100%}
       case 'salvar': { const [tab,obj]=a; if(['frentes','frotas'].indexOf(tab)<0) throw new Error('Tabela inválida.');
         const id=obj.id||db.collection(tab).doc().id, d={...obj}; delete d.id; await db.collection(tab).doc(id).set(d,{merge:true}); return {id,...obj}; }
       case 'excluir': { const [tab,id]=a;
-        if(tab==='lancamentos') return delLanc(id);
+        if(tab==='lancamentos') throw new Error('Lançamentos não são apagados. Use "Anular".');
         if(tab==='frentes'&&S.frotas.some(v=>v.frenteId===id)) throw new Error('Retire ou mude as frotas desta frente antes de excluir.');
         if(tab==='usuarios') throw new Error('Use "Suspender" para tirar o acesso de alguém.');
         await db.collection(tab).doc(id).delete(); return true; }
@@ -637,11 +727,11 @@ img{max-width:100%}
           <td>${l?`<span class="lvl"><span class="tank"><i class="lv-${c}" style="width:${Number(l.pct)}%"></i></span><b>${Math.round(l.pct)}%</b></span>`:'<span class="hint">sem informação</span>'}</td>
           <td class="r num">${l&&l.horimetro!=null?nf1.format(l.horimetro)+' h':'–'}</td>
           <td class="num ${velho?'stale':''}">${l?quando(l.quando):''}${l&&l.lancadoEm?`<div class="hint" style="font-family:var(--f-body)">lançado ${lanc(l)}</div>`:''}</td>
-          <td>${l?esc(nomeInfo(l)):'–'}</td></tr>`; }).join('');
+          <td>${l?esc(nomeInfo(l)):'–'}${l&&l.editadoPor?`<div class="obs-edit">corrigido por ${esc(l.editadoPor)} em ${quando(l.editadoEm)}</div>`:''}</td></tr>`; }).join('');
       return `<article class="frente"><div class="f-head">
-          <div class="f-title"><h3>${esc(f.nome)}${f.exemplo?' <span class="tag ex">exemplo</span>':''}</h3><div class="fazenda inline-edit">${ehAdmin()&&S.editFazG===f.id
+          <div class="f-title"><h3>${esc(f.nome)}${f.exemplo?' <span class="tag ex">exemplo</span>':''}</h3><div class="fazenda inline-edit">${S.editFazG===f.id
             ? `Fazenda: <input type="text" id="fazg-${esc(f.id)}" value="${esc(f.fazenda||'')}" aria-label="Fazenda da ${esc(f.nome)}"><button class="btn-primary btn-sm" data-savefazg="${esc(f.id)}" type="button">Salvar</button><button class="btn-ghost btn-sm" data-cancel type="button">Cancelar</button>`
-            : `Fazenda: <b>${f.fazenda?esc(f.fazenda):'não informada'}</b>${ehAdmin()?` <button class="btn-link edit" data-editfazg="${esc(f.id)}" type="button">Alterar fazenda</button>`:''}`}</div>
+            : `Fazenda: <b>${f.fazenda?esc(f.fazenda):'não informada'}</b> <button class="btn-link edit" data-editfazg="${esc(f.id)}" type="button">Alterar fazenda</button>${f.fazendaAlteradaPor?`<span class="hint" style="display:inline"> · alterada por ${esc(f.fazendaAlteradaPor)} em ${quando(f.fazendaAlteradaEm)}</span>`:''}`}</div>
           <div class="fazenda">Última informação: <b>${(()=>{ const t=fs.map(v=>u[v.id]).filter(Boolean).map(l=>l.quando).sort().pop(); return t?quando(t):'nenhuma'; })()}</b></div></div>
           <div class="gauges">${gauge('Colhedoras',mc)}${gauge('Tratores',mt)}</div></div>
         ${fs.length?`<div class="table-wrap"><table><thead><tr><th>Frota</th><th>Equipamento</th><th>% combustível</th><th class="r">Horímetro</th><th>Horário informado</th><th>Responsável pela informação</th></tr></thead><tbody>${linhas}</tbody></table></div>`
@@ -668,18 +758,38 @@ img{max-width:100%}
       return `<section class="mgroup"><div class="mg-head"><span><b>${esc(f.nome)}</b> <span class="hint" style="display:inline">· Fazenda ${esc(f.fazenda||'–')}</span></span><span class="mg-stats">${st('Colhedoras',gc)}${st('Tratores',gt)}</span></div>
         <div class="machines">${ms.map(card).join('')}</div></section>`; }).join('')
       : `<div class="empty box">Nenhuma frota ${R.frente?'nesta frente':'cadastrada'}.</div>`;
-    const hist=[...R.linhas].reverse(), adm=ehAdmin();
-    $('#hist-count').textContent = hist.length ? `${hist.length} informaç${hist.length>1?'ões':'ão'} · ${R.rotulo}` : '';
+    const adm=ehAdmin();
+    const anulados=(S.todas||[]).filter(l=>l.anulado&&(()=>{ const v=S.frotas.find(x=>x.id===l.frotaId); if(!v||(R.frente&&v.frenteId!==R.frente)) return false;
+      const d=localDay(l.quando), de=$('#r-de').value, ate=$('#r-ate').value; return (!de||d>=de)&&(!ate||d<=ate); })())
+      .map(l=>{ const v=S.frotas.find(x=>x.id===l.frotaId); return {...l,v,f:S.frentes.find(f=>f.id===v.frenteId),dp:undefined,dh:null}; });
+    const hist=[...R.linhas,...anulados].sort((a,b)=>(b.quando||'').localeCompare(a.quando||'')||(b.lancadoEm||'').localeCompare(a.lancadoEm||''));
+    S.histLim=S.histLim||100;
+    const vis=hist.slice(0,S.histLim);
+    $('#hist-count').textContent = hist.length ? `${hist.length} informaç${hist.length>1?'ões':'ão'} · ${R.rotulo}${anulados.length?` · ${anulados.length} anulada(s)`:''}` : '';
+    const obsEd = l => { const e=l.edicoes||[]; if(!e.length) return ''; const u=e[e.length-1], a=u.antes||{};
+      return `<div class="obs-edit">corrigido por <b>${esc(u.usuario||'')}</b> em ${quando(u.em)} · antes: ${Math.round(a.pct)}%${a.horimetro!=null?' · '+nf1.format(a.horimetro)+' h':''} · ${quando(a.quando)} · ${esc(a.responsavel||'')}${u.motivo?` · motivo: ${esc(u.motivo)}`:''}${e.length>1?` · ${e.length} correções`:''}</div>`; };
+    const linhaEdit = l => { const qd=new Date(l.quando), loc=new Date(qd.getTime()-qd.getTimezoneOffset()*6e4).toISOString().slice(0,16);
+      return `<tr class="editando" data-ed="${esc(l.id)}"><td><input type="datetime-local" class="w-hora ed-quando" value="${loc}" aria-label="Horário informado"></td><td class="num hint">${lanc(l)}</td><td>${l.f?esc(l.f.nome):'–'}</td><td><b>${esc(l.v.codigo)}</b></td><td>${esc(l.v.tipo)}</td>
+        <td class="r"><input class="ed-pct" value="${Math.round(l.pct)}" inputmode="numeric" aria-label="% combustível"></td><td></td>
+        <td class="r"><input class="ed-hor" value="${l.horimetro!=null?l.horimetro:''}" inputmode="decimal" placeholder="${l.v.tipo==='Colhedora'?'obrigatório':'opcional'}" aria-label="Horímetro"></td><td></td>
+        <td><input class="w-resp ed-resp" value="${esc(l.responsavel||'')}" aria-label="Responsável"><input class="w-resp ed-motivo" placeholder="motivo (opcional)" style="margin-top:4px" aria-label="Motivo da correção"></td>
+        <td class="acoes r"><span class="confirm"><button class="btn-primary" data-edsalvar="${esc(l.id)}" type="button">Salvar correção</button><button class="btn-ghost" data-cancel type="button">Cancelar</button></span><div class="msg err" data-edmsg="${esc(l.id)}"></div></td></tr>`; };
     $('#hist').innerHTML = hist.length ? `<div class="table-wrap boxed"><table>
-      <thead><tr><th>Horário informado</th><th>Lançado no site</th><th>Frente</th><th>Frota</th><th>Equipamento</th><th class="r">% combustível</th><th>Variação</th><th class="r">Horímetro</th><th class="r">Horas</th><th>Responsável pela informação</th>${adm?'<th></th>':''}</tr></thead>
-      <tbody>${hist.map(l=>{ const act = !adm ? '' : S.confirm==='l:'+l.id
-          ? `<span class="confirm"><button class="btn-danger" data-dell="${esc(l.id)}" type="button">Apagar</button><button class="btn-ghost" data-cancel type="button">Cancelar</button></span>`
-          : `<button class="btn-link" data-ask="l:${esc(l.id)}" type="button">Excluir</button>`;
-        const varTxt = l.dp==null ? '<span class="chip first">1ª informação</span>' : l.dp>0 ? `<span class="chip up">+${Math.round(l.dp)} p.p. · abastecida</span>` : `<span class="num">${Math.round(l.dp)} p.p.</span>`;
-        return `<tr><td class="num"><b>${quando(l.quando)}</b></td><td class="num hint">${lanc(l)}</td><td>${l.f?esc(l.f.nome):'–'}</td><td><b>${esc(l.v.codigo)}</b>${l.exemplo?' <span class="tag ex">exemplo</span>':''}</td>
+      <thead><tr><th>Horário informado</th><th>Lançado no site</th><th>Frente</th><th>Frota</th><th>Equipamento</th><th class="r">% combustível</th><th>Variação</th><th class="r">Horímetro</th><th class="r">Horas</th><th>Responsável pela informação</th><th></th></tr></thead>
+      <tbody>${vis.map(l=>{
+        if(S.editando===l.id&&!l.anulado) return linhaEdit(l);
+        let act='';
+        if(l.anulado) act = adm ? `<button class="btn-link edit" data-reativar="${esc(l.id)}" type="button">Reativar</button>` : '';
+        else if(S.confirm==='a:'+l.id) act=`<span class="confirm"><input class="w-resp" id="anul-motivo" placeholder="motivo" style="width:130px;padding:4px 6px"><button class="btn-danger" data-anular="${esc(l.id)}" type="button">Anular</button><button class="btn-ghost" data-cancel type="button">Cancelar</button></span>`;
+        else act=`<button class="btn-link edit" data-editar="${esc(l.id)}" type="button">Corrigir</button>${adm?` <button class="btn-link" data-ask="a:${esc(l.id)}" type="button">Anular</button>`:''}`;
+        const varTxt = l.anulado ? '' : l.dp==null ? '<span class="chip first">1ª informação</span>' : l.dp>0 ? `<span class="chip up">+${Math.round(l.dp)} p.p. · abastecida</span>` : `<span class="num">${Math.round(l.dp)} p.p.</span>`;
+        const marca = l.anulado ? ` <span class="chip anul">anulado</span>` : (l.edicoes&&l.edicoes.length) ? ` <span class="chip edit">corrigido</span>` : '';
+        const obs = l.anulado ? `<div class="obs-edit">anulado por <b>${esc(l.anuladoPor||'')}</b> em ${quando(l.anuladoEm)}${l.motivoAnulacao?` · motivo: ${esc(l.motivoAnulacao)}`:''}</div>` : obsEd(l);
+        return `<tr class="${l.anulado?'anulado':''}"><td class="num"><b>${quando(l.quando)}</b></td><td class="num hint">${lanc(l)}${l.origem==='mensagem'?'<div class="obs-edit">via mensagem</div>':''}</td><td>${l.f?esc(l.f.nome):'–'}</td><td><b>${esc(l.v.codigo)}</b>${marca}</td>
           <td>${esc(l.v.tipo)}</td><td class="r num">${Math.round(l.pct)}%</td><td>${varTxt}</td><td class="r num">${l.horimetro!=null?nf1.format(l.horimetro)+' h':'–'}</td>
-          <td class="r num">${l.dh!=null?nf1.format(l.dh):'–'}</td><td>${esc(nomeInfo(l))}</td>${adm?`<td class="r">${act}</td>`:''}</tr>`; }).join('')}</tbody></table></div>`
-      : `<div class="empty box">Nenhuma informação lançada ${R.frente?'nesta frente ':''}no período. Mude as datas ou lance na <b>Visão geral</b>.</div>`;
+          <td class="r num">${l.dh!=null?nf1.format(l.dh):'–'}</td><td class="obs">${esc(nomeInfo(l))}${obs}</td><td class="acoes r">${act}</td></tr>`; }).join('')}</tbody></table></div>
+      ${hist.length>vis.length?`<div class="mais"><button class="btn-ghost" id="btn-hist-mais" type="button">Mostrar mais (${hist.length-vis.length} restantes)</button></div>`:''}`
+      : `<div class="empty box">Nenhuma informação lançada ${R.frente?'nesta frente ':''}no período. Mude as datas, clique em <b>Todo o período</b> ou lance na aba <b>Lançar informações</b>.</div>`;
   }
 
   function renderFrotas(frentes,u){
@@ -702,6 +812,138 @@ img{max-width:100%}
         <td><select data-mover="${esc(v.id)}" aria-label="Frente da frota ${esc(v.codigo)}" style="width:auto;padding:4px 6px;font-size:.88rem">${frentes.map(o=>`<option value="${esc(o.id)}"${o.id===v.frenteId?' selected':''}>${esc(o.nome)}</option>`).join('')}</select></td>
         <td class="num">${l?Math.round(l.pct)+'% · '+quando(l.quando):'–'}</td><td class="r">${act}</td></tr>`; }).join('')}</tbody></table></div>`
       : '<div class="empty box">Nenhuma frota cadastrada.</div>';
+  }
+
+  // ---- Importar mensagem de combustível (texto do WhatsApp) ----
+  const semAcento = t => String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'');
+  // número do horímetro: aceita "8385.5", "8385,5", "8.385,5", "8,385.5"
+  function lerHorimetro(txt){
+    const t=(String(txt||'').match(/\d[\d.,]*/)||[''])[0].replace(/[.,]+$/,'');
+    if(!t) return null;
+    const ip=t.lastIndexOf('.'), iv=t.lastIndexOf(',');
+    let inteiro, dec='';
+    if(ip>=0 && iv>=0){ const k=Math.max(ip,iv); inteiro=t.slice(0,k).replace(/[.,]/g,''); dec=t.slice(k+1); }
+    else if(ip>=0 || iv>=0){ const sep=ip>=0?'.':','; const p=t.split(sep);
+      if(p.length>2){ inteiro=p.join(''); } else { inteiro=p[0]; dec=p[1]; } }
+    else inteiro=t;
+    const valor=Number(inteiro+(dec?'.'+dec:''));
+    return isFinite(valor) ? {valor, casas:dec.length} : null;
+  }
+  function lerPorcentagem(txt){
+    const m=String(txt||'').match(/-?\d+(?:[.,]\d+)?/); if(!m) return null;
+    const v=Number(m[0].replace(',','.')); return isFinite(v) ? {valor:v, inteiro:Number.isInteger(v)} : null;
+  }
+  function interpretarMensagem(texto){
+    const blocos=[]; let atual=null;
+    String(texto||'').split(/\r?\n/).forEach(bruta=>{
+      const L=semAcento(bruta).toUpperCase().replace(/\s+/g,' ').trim(); if(!L) return;
+      let m;
+      if((m=L.match(/^\*?FROTA\b\*?\s*[:\-–]?\s*(.*)$/))){ atual={codigo:((m[1].match(/\d+/)||[''])[0]),pctTxt:null,horTxt:null}; blocos.push(atual); return; }
+      if(!atual) return; // títulos e linhas antes da primeira frota
+      const resto = s => s.replace(/^[^:\-–\d]*[:\-–]?\s*/,'');
+      if(/^\*?(HORIM|HORAS?(?![A-Z])|HR(?![A-Z])|H\.?\s?R\.?(?![A-Z]))/.test(L)){ atual.horTxt=resto(L); return; }
+      if(/^\*?(PORCENT|PERCENT|NIVEL|COMBUST|%)/.test(L)){ atual.pctTxt=resto(L); return; }
+    });
+    const vistos={}, duplicadas=[];
+    blocos.forEach((b,i)=>{ if(!b.codigo) return; if(vistos[b.codigo]!==undefined){ duplicadas.push(b.codigo); blocos[vistos[b.codigo]]=null; } vistos[b.codigo]=i; });
+    const linhas=blocos.filter(Boolean).map(b=>{ const h=lerHorimetro(b.horTxt), p=lerPorcentagem(b.pctTxt);
+      return { codigo:b.codigo, pct: p?String(p.valor):'', hor: h?String(h.valor):'', casas: h?h.casas:0, salvar:true }; });
+    return { linhas, duplicadas:[...new Set(duplicadas)] };
+  }
+  // devolve [{nivel:'erro'|'alerta', msg}] para uma linha da pré-visualização
+  function validarImport(l, frotasPorCodigo, ultimasLeituras, quandoISO){
+    const st=[], v=frotasPorCodigo[String(l.codigo).trim()];
+    if(!String(l.codigo).trim()) st.push({nivel:'erro',msg:'sem número de frota'});
+    else if(!v) st.push({nivel:'erro',msg:'frota não cadastrada'});
+    const pS=String(l.pct).trim().replace(',','.');
+    if(pS==='') st.push({nivel:'erro',msg:'sem porcentagem'});
+    else { const p=Number(pS); if(!isFinite(p)||p<0||p>100) st.push({nivel:'erro',msg:'porcentagem fora de 0 a 100'}); else if(!Number.isInteger(p)) st.push({nivel:'erro',msg:'porcentagem deve ser número inteiro'}); }
+    const hS=String(l.hor).trim();
+    if(hS===''){ if(!v||v.tipo==='Colhedora') st.push({nivel:'erro',msg:'sem horímetro'}); else st.push({nivel:'alerta',msg:'sem horímetro (opcional no trator)'}); }
+    else { const h=lerHorimetro(hS);
+      if(!h) st.push({nivel:'erro',msg:'horímetro inválido'});
+      else {
+        if(h.casas>1) st.push({nivel:'alerta',msg:`${h.casas} casas decimais, conferir digitação`});
+        const ant=v&&ultimasLeituras[v.id];
+        if(ant&&ant.horimetro!=null){
+          const a=Number(ant.horimetro);
+          if(h.valor<a) st.push({nivel:'erro',msg:`menor que o anterior: ${nf1.format(a)}`});
+          else { const ref=quandoISO?new Date(quandoISO):new Date(); const dias=Math.max(1,(ref-new Date(ant.quando))/864e5);
+            if(h.valor-a>24*dias) st.push({nivel:'alerta',msg:`salto grande (+${nf1.format(h.valor-a)} h), conferir`}); }
+        }
+      }
+    }
+    return st;
+  }
+
+  const IMP={linhas:[],duplicadas:[],texto:''};
+  const frotasPorCodigo = () => { const m={}; S.frotas.forEach(v=>m[String(v.codigo)]=v); return m; };
+  function impQuando(){ const d=$('#imp-data').value, h=$('#imp-hora').value; return (d&&h)?new Date(d+'T'+h).toISOString():null; }
+  function impPills(st){ return st.length ? st.map(x=>`<span class="st-pill st-${x.nivel}">${x.nivel==='erro'?'Erro':'Alerta'}: ${esc(x.msg)}</span>`).join('') : '<span class="st-pill st-ok">OK</span>'; }
+  function impAtualizarLinha(i){
+    const l=IMP.linhas[i], tr=document.querySelector(`#imp-linhas tr[data-i="${i}"]`); if(!tr) return;
+    const fm=frotasPorCodigo(), v=fm[String(l.codigo).trim()];
+    l.st=validarImport(l,fm,ultimas(),impQuando());
+    tr.querySelector('.eq').innerHTML = v?`<span class="tag ${v.tipo==='Colhedora'?'col':''}">${esc(v.tipo)}</span> ${esc(((S.frentes.find(f=>f.id===v.frenteId)||{}).nome)||'')}`:'–';
+    tr.querySelector('.st').innerHTML=impPills(l.st); tr.classList.toggle('off',!l.salvar);
+    impResumo();
+  }
+  function impResumo(){
+    const fm=frotasPorCodigo(), av=[];
+    if(IMP.duplicadas.length) av.push(`Frota(s) repetida(s) na mensagem: <b>${IMP.duplicadas.map(esc).join(', ')}</b>. Foi usada a última informação de cada uma.`);
+    const vindas=new Set(IMP.linhas.map(l=>String(l.codigo).trim()));
+    const frentesNaMsg=new Set(IMP.linhas.map(l=>fm[String(l.codigo).trim()]).filter(Boolean).map(v=>v.frenteId));
+    const faltando=S.frotas.filter(v=>frentesNaMsg.has(v.frenteId)&&!vindas.has(String(v.codigo))).sort(byCode);
+    if(faltando.length) av.push(`Sem informação nesta mensagem (${faltando.length}): ${faltando.map(v=>esc(v.codigo)).join(', ')}.`);
+    const sel=IMP.linhas.filter(l=>l.salvar), comErro=sel.filter(l=>(l.st||[]).some(x=>x.nivel==='erro')).length, alertas=sel.filter(l=>(l.st||[]).some(x=>x.nivel==='alerta')).length;
+    av.push(`<b>${IMP.linhas.length}</b> frota(s) lida(s) · <b>${sel.length}</b> marcada(s) para salvar · <b>${comErro}</b> com erro · <b>${alertas}</b> com alerta.`);
+    $('#imp-avisos').innerHTML=av.map(a=>`<div class="aviso-imp">${a}</div>`).join('');
+  }
+  function impMontar(){
+    $('#imp-linhas').innerHTML=IMP.linhas.map((l,i)=>`<tr data-i="${i}">
+      <td><input type="checkbox" data-impcampo="salvar" ${l.salvar?'checked':''} aria-label="Salvar a linha ${i+1}"></td>
+      <td><input class="cod" data-impcampo="codigo" value="${esc(l.codigo)}" inputmode="numeric" aria-label="Frota"></td>
+      <td class="eq"></td>
+      <td><input data-impcampo="pct" value="${esc(l.pct)}" inputmode="numeric" aria-label="Nível em %"></td>
+      <td><input data-impcampo="hor" value="${esc(l.hor)}" inputmode="decimal" aria-label="Horímetro"></td>
+      <td class="st"></td></tr>`).join('');
+    IMP.linhas.forEach((_,i)=>impAtualizarLinha(i));
+    $('#imp-prev').hidden=!IMP.linhas.length;
+  }
+  function impLimpar(tudo){ IMP.linhas=[]; IMP.duplicadas=[]; $('#imp-prev').hidden=true; $('#imp-linhas').innerHTML=''; $('#imp-avisos').innerHTML=''; $('#msg-imp-salvar').textContent='';
+    if(tudo){ $('#imp-texto').value=''; $('#msg-imp-ler').textContent=''; } }
+  document.addEventListener('input',e=>{ const t=e.target; if(!t.dataset||!t.dataset.impcampo) return;
+    const i=Number(t.closest('tr').dataset.i), c=t.dataset.impcampo; IMP.linhas[i][c]= c==='salvar'?t.checked:t.value; impAtualizarLinha(i); });
+  ['#imp-data','#imp-hora'].forEach(sel=>document.addEventListener('change',e=>{ if(e.target.matches&&e.target.matches(sel)) IMP.linhas.forEach((_,i)=>impAtualizarLinha(i)); }));
+  async function impSalvar(){
+    const msg=$('#msg-imp-salvar'); msg.className='msg';
+    const sel=IMP.linhas.map((l,i)=>({l,i})).filter(x=>x.l.salvar);
+    if(!sel.length){ msg.className='msg err'; msg.textContent='Nenhuma linha marcada para salvar.'; return; }
+    IMP.linhas.forEach((_,i)=>impAtualizarLinha(i));
+    const ruins=sel.filter(x=>x.l.st.some(s=>s.nivel==='erro'));
+    if(ruins.length){ msg.className='msg err'; msg.textContent=`Corrija ou desmarque as ${ruins.length} linha(s) com erro antes de salvar.`; return; }
+    const quando=impQuando(), resp=$('#imp-resp').value.trim();
+    if(!quando){ msg.className='msg err'; msg.textContent='Informe a data e a hora em que a frente passou a informação.'; $((!$('#imp-data').value)?'#imp-data':'#imp-hora').classList.add('bad'); return; }
+    if(new Date(quando).getTime()>Date.now()+10*6e4){ msg.className='msg err'; msg.textContent='O horário informado está no futuro.'; return; }
+    if(!resp){ msg.className='msg err'; msg.textContent='Informe o responsável pela frente.'; $('#imp-resp').classList.add('bad'); return; }
+    const fm=frotasPorCodigo();
+    const itens=sel.map(({l})=>{ const h=String(l.hor).trim(); return {frotaId:fm[String(l.codigo).trim()].id,pct:Number(String(l.pct).replace(',','.')),
+      horimetro:h===''?null:lerHorimetro(h).valor,quando,responsavel:resp}; });
+    const b=$('#btn-imp-salvar'); b.disabled=true; msg.textContent='Salvando…';
+    try{
+      const ref=db.collection('importacoes').doc();
+      const agora=new Date().toISOString(), es=itens.map(i=>({frotaId:i.frotaId,e:Object.assign(prepararLanc(i,agora),{origem:'mensagem',importacaoId:ref.id})}));
+      const lote=db.batch();
+      es.forEach(({frotaId,e})=>{ const mes=mesDe(e.quando); lote.set(db.collection('registros').doc(frotaId+'_'+mes),{frotaId,mes,itens:FV.arrayUnion(e)},{merge:true}); });
+      lote.set(ref,{texto:IMP.texto.slice(0,50000),quando,lancadoEm:agora,usuarioId:S.sessao.id,usuario:S.sessao.nome,responsavel:resp,
+        frotas:es.map(x=>x.frotaId),total:es.length,ignoradas:IMP.linhas.length-sel.length});
+      await lote.commit();
+      const total=es.length, ign=IMP.linhas.length-sel.length;
+      impLimpar(true);
+      const m2=$('#msg-imp-ler'); m2.className='msg'; m2.textContent=`${total} frota(s) atualizada(s), 0 com erro${ign?` · ${ign} desmarcada(s) não salva(s)`:''}. Texto original guardado.`;
+    }catch(err){ msg.className='msg err'; msg.textContent = err&&err.code==='permission-denied'
+      ? 'O banco recusou a importação. Atualize as regras do Firestore com o arquivo firestore.rules novo.' : erroTxt(err); }
+    b.disabled=false;
   }
 
   // ---- aba Lançar informações (modo planilha) ----
@@ -785,7 +1027,7 @@ img{max-width:100%}
     const col=t.dataset.col, todos=[...document.querySelectorAll(`.lote-t input[data-col="${col}"]`)], i=todos.indexOf(t);
     const prox=todos[i+(e.key==='ArrowUp'?-1:1)]; if(prox){ prox.focus(); prox.select&&prox.select(); }
   });
-  document.addEventListener('input',e=>{ if(e.target.matches&&e.target.matches('.lote input.bad')) e.target.classList.remove('bad'); });
+  document.addEventListener('input',e=>{ if(e.target.matches&&e.target.matches('.lote input.bad, #imp-panel input.bad')) e.target.classList.remove('bad'); });
 
   function renderUsuarios(vMap,fMap){
     const cont={}, ult={};
@@ -800,10 +1042,21 @@ img{max-width:100%}
         <td class="r num">${cont[x.id]||0}</td><td class="num">${ult[x.id]?quando(ult[x.id]):'–'}</td><td class="r">${act}</td></tr>`; }).join('')}</tbody></table></div>
       <p class="hint">* Lançamentos dos últimos meses carregados no site. Suspender tira o acesso na hora; reativar devolve.<br><b>Se alguém esquecer a senha:</b> no Firebase, em Authentication › Usuários, exclua o login dessa pessoa (o usuário aparece como <i>usuario@usuarios.abastecimento-crv.app</i>) e cadastre de novo aqui com o mesmo usuário e uma senha nova.</p><p class="msg" id="msg-usu" role="status"></p>`
       : '<p class="hint">Nenhuma pessoa cadastrada ainda. Use o formulário acima.</p>';
-    const at=[...S.leituras].sort((a,b)=>(b.lancadoEm||b.quando||'').localeCompare(a.lancadoEm||a.quando||'')).slice(0,30);
+    S.atLim=S.atLim||100; const atTodas=[...(S.todas||[])].sort((a,b)=>(b.lancadoEm||b.quando||'').localeCompare(a.lancadoEm||a.quando||'')); const at=atTodas.slice(0,S.atLim);
     $('#atividade').innerHTML = at.length ? `<div class="table-wrap boxed"><table><thead><tr><th>Horário informado</th><th>Lançado no site</th><th>Responsável pela informação</th><th>Usuário que lançou</th><th>Frente</th><th>Frota</th><th class="r">%</th><th class="r">Horímetro</th></tr></thead><tbody>${at.map(l=>{ const v=vMap[l.frotaId], f=v&&fMap[v.frenteId];
-      return `<tr><td class="num"><b>${quando(l.quando)}</b></td><td class="num hint">${lanc(l)}</td><td><b>${esc(nomeInfo(l))}</b></td><td>${esc(nomeUsuario(l))}</td><td>${f?esc(f.nome):'–'}</td><td>${v?esc(v.codigo):'(retirada)'}</td><td class="r num">${Math.round(l.pct)}%</td><td class="r num">${l.horimetro!=null?nf1.format(l.horimetro):'–'}</td></tr>`; }).join('')}</tbody></table></div>`
+      return `<tr class="${l.anulado?'anulado':''}"><td class="num"><b>${quando(l.quando)}</b>${l.anulado?' <span class="chip anul">anulado</span>':(l.edicoes&&l.edicoes.length)?' <span class="chip edit">corrigido</span>':''}</td><td class="num hint">${lanc(l)}</td><td><b>${esc(nomeInfo(l))}</b></td><td>${esc(nomeUsuario(l))}</td><td>${f?esc(f.nome):'–'}</td><td>${v?esc(v.codigo):'(retirada)'}</td><td class="r num">${Math.round(l.pct)}%</td><td class="r num">${l.horimetro!=null?nf1.format(l.horimetro):'–'}</td></tr>`; }).join('')}</tbody></table></div>`
+      +(atTodas.length>at.length?`<div class="mais"><button class="btn-ghost" id="btn-at-mais" type="button">Mostrar mais (${atTodas.length-at.length} restantes)</button></div>`:'')
       : '<div class="empty box">Nenhum lançamento ainda.</div>';
+    const fN=id=>{ const v=S.frotas.find(x=>x.id===id); return v?v.codigo:'?'; };
+    const vtxt=x=>x?`${x.pct!=null?Math.round(x.pct)+'%':''}${x.horimetro!=null?' · '+nf1.format(x.horimetro)+' h':''}${x.quando?' · '+quando(x.quando):''}${x.responsavel?' · '+esc(x.responsavel):''}`:'';
+    const TIPO={correcao:'Correção',anulacao:'Anulação',reativacao:'Reativação',fazenda:'Fazenda'};
+    S.altLim=S.altLim||100; const alt=(S.alteracoes||[]).slice(0,S.altLim);
+    $('#alteracoes').innerHTML = alt.length ? `<div class="table-wrap boxed"><table><thead><tr><th>Quando</th><th>Usuário</th><th>Tipo</th><th>Onde</th><th>Antes</th><th>Depois</th><th>Motivo</th></tr></thead><tbody>${alt.map(a=>`<tr>
+        <td class="num">${quando(a.em)}</td><td><b>${esc(a.usuario||'')}</b></td><td><span class="chip ${a.tipo==='anulacao'?'anul':'edit'}">${TIPO[a.tipo]||esc(a.tipo)}</span></td>
+        <td>${a.tipo==='fazenda'?esc(a.frente||''):'Frota '+esc(fN(a.frotaId))}</td>
+        <td class="obs">${a.tipo==='fazenda'?esc(a.antes||'(vazio)'):vtxt(a.antes)}</td><td class="obs">${a.tipo==='fazenda'?esc(a.depois||'(vazio)'):a.tipo==='correcao'?vtxt(a.depois):'–'}</td><td class="obs">${esc(a.motivo||'')}</td></tr>`).join('')}</tbody></table></div>
+      ${(S.alteracoes||[]).length>alt.length?`<div class="mais"><button class="btn-ghost" id="btn-alt-mais" type="button">Mostrar mais (${S.alteracoes.length-alt.length} restantes)</button></div>`:''}`
+      : '<div class="empty box">Nenhuma alteração feita até agora.</div>';
   }
 
   const frenteDaFrota = id => { const v=S.frotas.find(x=>x.id===id); return v ? S.frentes.find(f=>f.id===v.frenteId) : null; };
@@ -906,10 +1159,17 @@ img{max-width:100%}
     const msg=$('#msg-xlsx'); msg.className='msg'; msg.textContent='';
     const X=window.XLSX; if(!X){ msg.className='msg err'; msg.textContent='O gerador de planilha não carregou. Recarregue a página.'; return; }
     const R=relatorio(), adm=ehAdmin();
-    const cab=['Horário informado','Lançado no site','Frente','Fazenda','Frota','Equipamento','Modelo','% combustível','Variação (p.p.)','Abastecida','Horímetro (h)','Horas desde a anterior','Responsável pela informação'].concat(adm?['Usuário que lançou']:[]);
-    const linhas=[...R.linhas].sort((a,b)=>(a.quando||'').localeCompare(b.quando||''));
-    const aoa=[cab,...linhas.map(l=>[null,null,l.f?l.f.nome:'',l.f?(l.f.fazenda||''):'',String(l.v.codigo),l.v.tipo,l.v.modelo||'',Number(l.pct),
-      l.dp==null?'':Math.round(l.dp),l.dp>0?'Sim':'Não',l.horimetro!=null?Number(l.horimetro):'',l.dh!=null?Math.round(l.dh*10)/10:'',l.responsavel||''].concat(adm?[nomeUsuario(l)]:[]))];
+    const cab=['Horário informado','Lançado no site','Frente','Fazenda','Frota','Equipamento','Modelo','% combustível','Variação (p.p.)','Abastecida','Horímetro (h)','Horas desde a anterior','Responsável pela informação','Situação','Corrigido por','Corrigido em','Valor antes da correção','Motivo'].concat(adm?['Usuário que lançou','Origem']:[]);
+    const de=$('#r-de').value, ate=$('#r-ate').value;
+    const anul=(S.todas||[]).filter(l=>{ if(!l.anulado) return false; const v=S.frotas.find(x=>x.id===l.frotaId); if(!v||(R.frente&&v.frenteId!==R.frente)) return false; const d=localDay(l.quando); return (!de||d>=de)&&(!ate||d<=ate); })
+      .map(l=>{ const v=S.frotas.find(x=>x.id===l.frotaId); return {...l,v,f:S.frentes.find(f=>f.id===v.frenteId),dp:null,dh:null}; });
+    const linhas=[...R.linhas,...anul].sort((a,b)=>(a.quando||'').localeCompare(b.quando||''));
+    const ult=l=>{ const e=l.edicoes||[]; return e[e.length-1]||null; };
+    const ant=a=>a?`${Math.round(a.pct)}%${a.horimetro!=null?' · '+a.horimetro+' h':''} · ${quando(a.quando)} · ${a.responsavel||''}`:'';
+    const aoa=[cab,...linhas.map(l=>{ const e=ult(l); return [null,null,l.f?l.f.nome:'',l.f?(l.f.fazenda||''):'',String(l.v.codigo),l.v.tipo,l.v.modelo||'',Number(l.pct),
+      l.dp==null?'':Math.round(l.dp),l.dp>0?'Sim':'Não',l.horimetro!=null?Number(l.horimetro):'',l.dh!=null?Math.round(l.dh*10)/10:'',l.responsavel||'',
+      l.anulado?`Anulado por ${l.anuladoPor||''} em ${quando(l.anuladoEm)}${l.motivoAnulacao?' ('+l.motivoAnulacao+')':''}`:(e?'Corrigido':'Original'),
+      e?(e.usuario||''):'',e?quando(e.em):'',e?ant(e.antes):'',e?(e.motivo||''):''].concat(adm?[nomeUsuario(l),l.origem==='mensagem'?'Importar mensagem':'Digitado']:[]); })];
     const ws=X.utils.aoa_to_sheet(aoa);
     linhas.forEach((l,i)=>{ const r=i+1;
       ws[X.utils.encode_cell({r,c:0})]={t:'n',v:serialExcel(l.quando),z:'dd/mm/yyyy hh:mm'};
@@ -1067,15 +1327,25 @@ img{max-width:100%}
   document.addEventListener('click', async e=>{
     const t=e.target.closest('button'); if(!t) return; const d=t.dataset;
     if(d.ask){ S.confirm=d.ask; render(); }
-    else if(t.hasAttribute('data-cancel')){ S.confirm=null; S.editFaz=null; S.editFazG=null; render(); }
+    else if(t.hasAttribute('data-cancel')){ S.confirm=null; S.editFaz=null; S.editFazG=null; S.editando=null; render(); }
     else if(d.editfazg){ S.editFazG=d.editfazg; render(); const i=document.getElementById('fazg-'+d.editfazg); if(i){ i.focus(); i.select(); } }
     else if(d.savefazg){ const i=document.getElementById('fazg-'+d.savefazg); const v=i?i.value.trim():''; S.editFazG=null;
-      try{ await mudar('salvar','frentes',{id:d.savefazg,fazenda:v}); }catch(err){ falhou(err); } }
+      try{ await alterarFazenda(d.savefazg,v); }catch(err){ falhou(err); } render(); }
     else if(d.editfaz){ S.editFaz=d.editfaz; render(); const i=document.getElementById('faz-'+d.editfaz); if(i) i.focus(); }
     else if(d.savefaz){ const i=document.getElementById('faz-'+d.savefaz), j=document.getElementById('resp-'+d.savefaz);
       const v=i?i.value.trim():'', r=j?j.value.trim():''; S.editFaz=null; try{ await mudar('salvar','frentes',{id:d.savefaz,fazenda:v,responsavel:r}); }catch(err){ falhou(err); } }
     else if(d.delv){ S.confirm=null; try{ await mudar('excluir','frotas',d.delv); }catch(err){ falhou(err); } }
-    else if(d.dell){ S.confirm=null; try{ await mudar('excluir','lancamentos',d.dell); }catch(err){ falhou(err); } }
+    else if(d.editar){ S.confirm=null; S.editando=d.editar; render(); const i=document.querySelector(`tr[data-ed="${d.editar}"] .ed-pct`); if(i){ i.focus(); i.select(); } }
+    else if(d.edsalvar){ const tr=document.querySelector(`tr[data-ed="${d.edsalvar}"]`), m=tr.querySelector('[data-edmsg]'); t.disabled=true;
+      try{ await editarLanc(d.edsalvar,{pct:tr.querySelector('.ed-pct').value,horimetro:tr.querySelector('.ed-hor').value,quando:tr.querySelector('.ed-quando').value,responsavel:tr.querySelector('.ed-resp').value},tr.querySelector('.ed-motivo').value);
+        S.editando=null; render(); }
+      catch(err){ m.textContent=erroTxt(err); t.disabled=false; } }
+    else if(d.anular){ const mo=($('#anul-motivo')||{}).value||''; S.confirm=null; try{ await anularLanc(d.anular,true,mo); }catch(err){ falhou(err); } render(); }
+    else if(d.reativar){ try{ await anularLanc(d.reativar,false,''); }catch(err){ falhou(err); } render(); }
+    else if(t.id==='btn-hist-mais'){ S.histLim=(S.histLim||100)+200; render(); }
+    else if(t.id==='btn-at-mais'){ S.atLim=(S.atLim||100)+200; render(); }
+    else if(t.id==='btn-alt-mais'){ S.altLim=(S.altLim||100)+200; render(); }
+    else if(t.id==='btn-todo-periodo'){ $('#r-de').value=''; $('#r-ate').value=''; S.histLim=100; render(); }
     else if(d.delf){ S.confirm=null; try{ await mudar('excluir','frentes',d.delf); }catch(err){ falhou(err); } }
     else if(d.delu){ S.confirm=null; try{ await mudar('excluir','usuarios',d.delu); }catch(err){ falhou(err); } }
     else if(d.status){ const x=S.usuarios.find(u=>u.id===d.status); if(!x) return;
@@ -1083,6 +1353,15 @@ img{max-width:100%}
     else if(d.novocod){ S.confirm=null; try{ await mudar('salvarUsuario',{id:d.novocod,novoCodigo:true}); }catch(err){ falhou(err); } }
     else if(d.copiarcod){ try{ await navigator.clipboard.writeText(d.copiarcod); t.textContent='Copiado'; }catch(_){ t.textContent=d.copiarcod; } setTimeout(()=>render(),1500); }
     else if(d.salvarlote){ const sec=document.querySelector(`.lote[data-frente="${d.salvarlote}"]`); if(sec) await salvarFrentes([sec],null); }
+    else if(t.id==='btn-imp-abrir'){ const p=$('#imp-panel'); p.hidden=!p.hidden; if(!p.hidden){ if(!$('#imp-data').value) $('#imp-data').value=hojeStr(); $('#imp-texto').focus(); } }
+    else if(t.id==='btn-imp-fechar'){ $('#imp-panel').hidden=true; }
+    else if(t.id==='btn-imp-cancelar'){ impLimpar(false); }
+    else if(t.id==='btn-imp-interpretar'){ const m=$('#msg-imp-ler'), txt=$('#imp-texto').value; m.className='msg';
+      const r=interpretarMensagem(txt); IMP.texto=txt; IMP.linhas=r.linhas; IMP.duplicadas=r.duplicadas;
+      if(!r.linhas.length){ impLimpar(false); m.className='msg err'; m.textContent='Não encontrei nenhum bloco "FROTA:" na mensagem. Confira o texto colado.'; return; }
+      if(!$('#imp-resp').value.trim()){ const v=frotasPorCodigo()[r.linhas[0].codigo]; if(v) $('#imp-resp').value=ultimoResp(v.frenteId); }
+      m.textContent=`${r.linhas.length} frota(s) lida(s). Confira a tabela abaixo.`; impMontar(); }
+    else if(t.id==='btn-imp-salvar'){ await impSalvar(); }
     else if(t.id==='btn-salvar-tudo'){ await salvarFrentes([...document.querySelectorAll('.lote')],$('#msg-tudo')); }
     else if(d.resetu!==undefined){ const m=$('#msg-usu'); if(!d.resetu) return; try{ await api('redefinirSenha',null,d.resetu); if(m){ m.className='msg'; m.textContent=`Enviamos para ${d.resetu} um e-mail para criar uma senha nova.`; } }catch(err){ if(m){ m.className='msg err'; m.textContent=erroTxt(err); } } }
     else if(d.renomear){ const x=S.usuarios.find(u=>u.id===d.renomear); const n=x&&window.prompt('Nome de '+(x.email||'usuário')+':',x.nome||''); if(n&&n.trim()){ try{ await mudar('salvarUsuario',{id:x.id,nome:n.trim()}); render(); }catch(err){ falhou(err); } } }
