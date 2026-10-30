@@ -195,6 +195,10 @@ tr.anulado td.acoes,tr.anulado td.obs{text-decoration:none;opacity:1}
 tr.editando td{background:var(--accent-soft)}
 tr.editando input{padding:4px 6px;width:96px;font-family:var(--f-mono)}
 tr.editando input.w-hora{width:150px} tr.editando input.w-resp{width:140px;font-family:var(--f-body)}
+.acoes,.acoes-h{position:sticky;left:0;z-index:1;background:var(--surface);white-space:nowrap;box-shadow:inset -1px 0 0 var(--line),inset 0 -1px 0 var(--line)}
+th.acoes-h{background:var(--surface-2)}
+tr.editando td.acoes{background:var(--accent-soft)}
+td.acoes .btn-link{padding:4px 6px}
 .mais{display:flex;justify-content:center;margin-top:10px}
 .aviso-imp{font-size:.88rem;padding:8px 12px;border-radius:8px;background:var(--warn-soft)}
 @media (max-width:620px){.lote-top{grid-template-columns:1fr 1fr}.lote-top .resp{grid-column:1/-1}.lote-t input{width:84px}}
@@ -843,13 +847,12 @@ img{max-width:100%}
     const obsEd = l => { const e=l.edicoes||[]; if(!e.length) return ''; const u=e[e.length-1], a=u.antes||{};
       return `<div class="obs-edit">corrigido por <b>${esc(u.usuario||'')}</b> em ${quando(u.em)} · antes: ${a.pct!=null?Math.round(a.pct)+'%':'não enviada'}${a.horimetro!=null?' · '+nf1.format(a.horimetro)+' h':''} · ${quando(a.quando)} · ${esc(a.responsavel||'')}${u.motivo?` · motivo: ${esc(u.motivo)}`:''}${e.length>1?` · ${e.length} correções`:''}</div>`; };
     const linhaEdit = l => { const qd=new Date(l.quando), loc=new Date(qd.getTime()-qd.getTimezoneOffset()*6e4).toISOString().slice(0,16);
-      return `<tr class="editando" data-ed="${esc(l.id)}"><td><input type="datetime-local" class="w-hora ed-quando" value="${loc}" aria-label="Horário informado"></td><td class="num hint">${lanc(l)}</td><td>${l.f?esc(l.f.nome):'–'}</td><td><b>${esc(l.v.codigo)}</b></td><td>${esc(l.v.tipo)}</td>
+      return `<tr class="editando" data-ed="${esc(l.id)}"><td class="acoes"><span class="confirm"><button class="btn-primary" data-edsalvar="${esc(l.id)}" type="button">Salvar correção</button><button class="btn-ghost" data-cancel type="button">Cancelar</button></span><div class="msg err" data-edmsg="${esc(l.id)}"></div></td><td><input type="datetime-local" class="w-hora ed-quando" value="${loc}" aria-label="Horário informado"></td><td class="num hint">${lanc(l)}</td><td>${l.f?esc(l.f.nome):'–'}</td><td><b>${esc(l.v.codigo)}</b></td><td>${esc(l.v.tipo)}</td>
         <td class="r"><input class="ed-pct" value="${temPct(l)?Math.round(l.pct):''}" placeholder="não enviada" inputmode="numeric" aria-label="% combustível"></td><td></td>
         <td class="r"><input class="ed-hor" value="${l.horimetro!=null?l.horimetro:''}" inputmode="decimal" placeholder="${l.v.tipo==='Colhedora'?'obrigatório':'opcional'}" aria-label="Horímetro"></td><td></td>
-        <td><input class="w-resp ed-resp" value="${esc(l.responsavel||'')}" aria-label="Responsável"><input class="w-resp ed-motivo" placeholder="motivo (opcional)" style="margin-top:4px" aria-label="Motivo da correção"></td>
-        <td class="acoes r"><span class="confirm"><button class="btn-primary" data-edsalvar="${esc(l.id)}" type="button">Salvar correção</button><button class="btn-ghost" data-cancel type="button">Cancelar</button></span><div class="msg err" data-edmsg="${esc(l.id)}"></div></td></tr>`; };
+        <td><input class="w-resp ed-resp" value="${esc(l.responsavel||'')}" aria-label="Responsável"><input class="w-resp ed-motivo" placeholder="motivo (opcional)" style="margin-top:4px" aria-label="Motivo da correção"></td></tr>`; };
     $('#hist').innerHTML = hist.length ? `<div class="table-wrap boxed"><table>
-      <thead><tr><th>Horário informado</th><th>Lançado no site</th><th>Frente</th><th>Frota</th><th>Equipamento</th><th class="r">% combustível</th><th>Variação</th><th class="r">Horímetro</th><th class="r">Horas</th><th>Responsável pela informação</th><th></th></tr></thead>
+      <thead><tr><th class="acoes-h">Ações</th><th>Horário informado</th><th>Lançado no site</th><th>Frente</th><th>Frota</th><th>Equipamento</th><th class="r">% combustível</th><th>Variação</th><th class="r">Horímetro</th><th class="r">Horas</th><th>Responsável pela informação</th></tr></thead>
       <tbody>${vis.map(l=>{
         if(S.editando===l.id&&!l.anulado) return linhaEdit(l);
         let act='';
@@ -859,9 +862,9 @@ img{max-width:100%}
         const varTxt = l.anulado ? '' : l.dp==null ? '<span class="chip first">1ª informação</span>' : l.dp>0 ? `<span class="chip up">+${Math.round(l.dp)} p.p. · abastecida</span>` : `<span class="num">${Math.round(l.dp)} p.p.</span>`;
         const marca = l.anulado ? ` <span class="chip anul">anulado</span>` : (l.edicoes&&l.edicoes.length) ? ` <span class="chip edit">corrigido</span>` : '';
         const obs = l.anulado ? `<div class="obs-edit">anulado por <b>${esc(l.anuladoPor||'')}</b> em ${quando(l.anuladoEm)}${l.motivoAnulacao?` · motivo: ${esc(l.motivoAnulacao)}`:''}</div>` : obsEd(l);
-        return `<tr class="${l.anulado?'anulado':''}"><td class="num"><b>${quando(l.quando)}</b></td><td class="num hint">${lanc(l)}${l.origem==='mensagem'?'<div class="obs-edit">via mensagem</div>':''}</td><td>${l.f?esc(l.f.nome):'–'}</td><td><b>${esc(l.v.codigo)}</b>${marca}</td>
+        return `<tr class="${l.anulado?'anulado':''}"><td class="acoes">${act}</td><td class="num"><b>${quando(l.quando)}</b></td><td class="num hint">${lanc(l)}${l.origem==='mensagem'?'<div class="obs-edit">via mensagem</div>':''}</td><td>${l.f?esc(l.f.nome):'–'}</td><td><b>${esc(l.v.codigo)}</b>${marca}</td>
           <td>${esc(l.v.tipo)}</td><td class="r num">${temPct(l)?Math.round(l.pct)+'%':NAO_ENV}</td><td>${varTxt}</td><td class="r num">${l.horimetro!=null?nf1.format(l.horimetro)+' h':'–'}</td>
-          <td class="r num">${l.dh!=null?nf1.format(l.dh):'–'}</td><td class="obs">${esc(nomeInfo(l))}${obs}${l.horRejeitado?`<div class="obs-edit">horímetro recebido ${esc(l.horRejeitado.valor)} não foi salvo (${esc(l.horRejeitado.motivo)})</div>`:''}</td><td class="acoes r">${act}</td></tr>`; }).join('')}</tbody></table></div>
+          <td class="r num">${l.dh!=null?nf1.format(l.dh):'–'}</td><td class="obs">${esc(nomeInfo(l))}${obs}${l.horRejeitado?`<div class="obs-edit">horímetro recebido ${esc(l.horRejeitado.valor)} não foi salvo (${esc(l.horRejeitado.motivo)})</div>`:''}</td></tr>`; }).join('')}</tbody></table></div>
       ${hist.length>vis.length?`<div class="mais"><button class="btn-ghost" id="btn-hist-mais" type="button">Mostrar mais (${hist.length-vis.length} restantes)</button></div>`:''}`
       : `<div class="empty box">Nenhuma informação lançada ${R.frente?'nesta frente ':''}no período. Mude as datas, clique em <b>Todo o período</b> ou lance na aba <b>Lançar informações</b>.</div>`;
   }
