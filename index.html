@@ -327,13 +327,17 @@ img{max-width:100%}
     <div id="lote" style="display:grid;gap:18px"></div>
   </div>
 
-  <!-- CONSUMO E HISTÓRICO -->
+  <!-- CONSUMO -->
   <div class="tab" id="tab-consumo" hidden>
     <section class="panel">
       <div class="panel-head"><h2>Consumo por máquina</h2><span class="hint" id="per-label"></span></div>
       <div class="mgroups" id="machines"></div>
       <p class="foot-note">O consumo é a queda da % de combustível dividida pelas horas do horímetro entre duas informações seguidas da mesma frota. Quando a % sobe, o lançamento conta como abastecimento e esse intervalo não entra no cálculo. A autonomia é a % atual dividida pelo consumo médio.</p>
     </section>
+  </div>
+
+  <!-- HISTÓRICO -->
+  <div class="tab" id="tab-historico" hidden>
     <section class="panel">
       <div class="panel-head"><h2>Histórico de abastecimento</h2><span style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><span class="hint" id="hist-count"></span><button class="btn-ghost btn-sm" id="btn-xlsx" type="button">Exportar dados (Excel)</button></span></div>
       <p class="msg" id="msg-xlsx" role="status"></p>
@@ -699,7 +703,7 @@ img{max-width:100%}
 
   // ---- abas ----
   function abas(){
-    const t=[{id:'geral',nome:'Visão geral'},{id:'lancar',nome:'Lançar informações'},{id:'consumo',nome:'Consumo e histórico'}];
+    const t=[{id:'geral',nome:'Visão geral'},{id:'lancar',nome:'Lançar informações'},{id:'consumo',nome:'Consumo'},{id:'historico',nome:'Histórico'}];
     t.push({id:'frotas',nome:ehAdmin()?'Frentes e frotas':'Frotas'}); if(ehAdmin()) t.push({id:'usuarios',nome:'Usuários'});
     return t;
   }
@@ -723,10 +727,10 @@ img{max-width:100%}
     const t=abas(), atual=abaAtual();
     $('#tabs').hidden = !logado;
     $('#tabs').innerHTML = logado ? t.map(x=>`<a href="#${x.id}" target="_self" ${x.id===atual?'aria-current="page"':''}>${x.nome}</a>`).join('') : '';
-    ['geral','lancar','consumo','frotas','usuarios'].forEach(id=>$('#tab-'+id).hidden = !logado || id!==atual);
-    $('#toolbar').hidden = !logado || !(atual==='geral'||atual==='consumo'||atual==='lancar');
-    $('#btn-pdf').hidden = atual==='lancar';
-    document.querySelectorAll('.per').forEach(el=>el.hidden = atual!=='consumo');
+    ['geral','lancar','consumo','historico','frotas','usuarios'].forEach(id=>$('#tab-'+id).hidden = !logado || id!==atual);
+    $('#toolbar').hidden = !logado || !(atual==='geral'||atual==='consumo'||atual==='historico'||atual==='lancar');
+    $('#btn-pdf').hidden = atual==='lancar'||atual==='historico';
+    document.querySelectorAll('.per').forEach(el=>el.hidden = atual!=='consumo'&&atual!=='historico');
     $('#btn-pdf').textContent = atual==='consumo' ? 'Exportar consumo (PDF)' : 'Exportar PDF';
     $('#notice-ex').hidden=true;
     if(!logado) return;
@@ -752,7 +756,7 @@ img{max-width:100%}
 
     if(atual==='geral') renderGeral(frentes,u);
     if(atual==='lancar') renderLote(frentes,u);
-    if(atual==='consumo') renderConsumo();
+    if(atual==='consumo'||atual==='historico') renderConsumo();
     if(atual==='frotas') renderFrotas(frentes,u);
     if(atual==='usuarios') renderUsuarios(vMap,fMap);
 
