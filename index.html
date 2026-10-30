@@ -185,7 +185,7 @@ td .code{font-family:var(--f-display);font-weight:700;font-size:1.15rem}
 .st-alerta{background:var(--warn-soft);color:var(--fg)}
 .st-erro{background:var(--crit-soft);color:var(--crit)}
 .imp-t tr.off td{opacity:.5}
-.desat{display:inline-block;vertical-align:middle;margin-left:10px;font-family:var(--f-body);font-size:.8rem;font-weight:800;letter-spacing:.03em;text-transform:uppercase;
+.desat{display:inline-block;vertical-align:middle;margin-left:8px;font-family:var(--f-body);font-size:.74rem;font-weight:800;letter-spacing:.03em;text-transform:uppercase;
   color:#fff;background:var(--crit);border-radius:999px;padding:3px 12px}
 .chip.nenv{background:var(--surface-2);color:var(--muted)}
 .st-info{background:var(--surface-2);color:var(--muted)}
@@ -813,10 +813,10 @@ img{max-width:100%}
           <td class="num ${velho?'stale':''}">${l?quando(l.quando):''}${l&&l.lancadoEm?`<div class="hint" style="font-family:var(--f-body)">lançado ${lanc(l)}</div>`:''}</td>
           <td>${l?esc(nomeInfo(l)):'–'}${l&&l.editadoPor?`<div class="obs-edit">corrigido por ${esc(l.editadoPor)} em ${quando(l.editadoEm)}</div>`:''}</td></tr>`; }).join('');
       return `<article class="frente"><div class="f-head">
-          <div class="f-title"><h3>${esc(f.nome)}${f.exemplo?' <span class="tag ex">exemplo</span>':''}${(()=>{ const t=ultimaDaFrente(fs,u); if(!fs.length) return ''; if(!t) return ' <span class="desat">Atenção: sem informação</span>'; const h=horasDesde(t); return h>LIMITE_DESATUALIZADO_H?` <span class="desat">Atenção: desatualizado · há ${fmtHoras(h)}</span>`:''; })()}</h3><div class="fazenda inline-edit">${S.editFazG===f.id
+          <div class="f-title"><h3>${esc(f.nome)}${f.exemplo?' <span class="tag ex">exemplo</span>':''}</h3><div class="fazenda inline-edit">${S.editFazG===f.id
             ? `Fazenda: <input type="text" id="fazg-${esc(f.id)}" value="${esc(f.fazenda||'')}" aria-label="Fazenda da ${esc(f.nome)}"><button class="btn-primary btn-sm" data-savefazg="${esc(f.id)}" type="button">Salvar</button><button class="btn-ghost btn-sm" data-cancel type="button">Cancelar</button>`
             : `Fazenda: <b>${f.fazenda?esc(f.fazenda):'não informada'}</b> <button class="btn-link edit" data-editfazg="${esc(f.id)}" type="button">Alterar fazenda</button>${f.fazendaAlteradaPor?`<span class="hint" style="display:inline"> · alterada por ${esc(f.fazendaAlteradaPor)} em ${quando(f.fazendaAlteradaEm)}</span>`:''}`}</div>
-          <div class="fazenda">Última informação: <b>${(()=>{ const t=ultimaDaFrente(fs,u); return t?quando(t):'nenhuma'; })()}</b></div></div>
+          <div class="fazenda">Última informação: <b>${(()=>{ const t=ultimaDaFrente(fs,u); return t?quando(t):'nenhuma'; })()}</b>${(()=>{ const t=ultimaDaFrente(fs,u); if(!fs.length) return ''; if(!t) return ' <span class="desat">Atenção: sem informação</span>'; const h=horasDesde(t); return h>LIMITE_DESATUALIZADO_H?` <span class="desat">Atenção: desatualizado · há ${fmtHoras(h)}</span>`:''; })()}</div></div>
           <div class="gauges">${gauge('Colhedoras',mc)}${gauge('Tratores',mt)}</div></div>
         ${fs.length?`<div class="table-wrap"><table><thead><tr><th>Frota</th><th>Equipamento</th><th>% combustível</th><th class="r">Horímetro</th><th>Horário informado</th><th>Responsável pela informação</th></tr></thead><tbody>${linhas}</tbody></table></div>`
           :`<div class="empty">Nenhuma frota nesta frente.</div>`}</article>`; }).join('')
@@ -1325,8 +1325,9 @@ img{max-width:100%}
       doc.text(`Fazenda: ${f.fazenda||'não informada'}    Última informação: ${tUlt?quando(tUlt):'nenhuma'}`,mx+3,y+9.6);
       { const hD=tUlt?horasDesde(tUlt):Infinity;
         if(fs.length&&hD>LIMITE_DESATUALIZADO_H){ const txt=tUlt?`ATENÇÃO: DESATUALIZADO · HÁ ${fmtHoras(hD).toUpperCase()}`:'ATENÇÃO: SEM INFORMAÇÃO';
-          doc.setFont('helvetica','bold'); doc.setFontSize(7.4); const tw=doc.getTextWidth(txt)+5, x0=mx+3+doc.getTextWidth(f.nome.toUpperCase())*11.5/7.4+4;
-          doc.setFillColor(176,58,46); doc.roundedRect(x0,y+1.9,tw,4.6,2.3,2.3,'F'); doc.setTextColor(255,255,255); doc.text(txt,x0+2.5,y+5.2); doc.setTextColor(20,33,61); } }
+          doc.setFont('helvetica','normal'); doc.setFontSize(7.8); const x0=mx+3+doc.getTextWidth(`Fazenda: ${f.fazenda||'não informada'}    Última informação: ${tUlt?quando(tUlt):'nenhuma'}`)+3;
+          doc.setFont('helvetica','bold'); doc.setFontSize(7); const tw=doc.getTextWidth(txt)+5;
+          doc.setFillColor(176,58,46); doc.roundedRect(x0,y+7.2,tw,3.8,1.9,1.9,'F'); doc.setTextColor(255,255,255); doc.text(txt,x0+2.5,y+9.8); doc.setTextColor(20,33,61); } }
       const pill=(x,rot,m)=>{ const w=40; doc.setFillColor(...fundoNivel(m.pct)); doc.roundedRect(x,y+1.6,w,8.8,1.3,1.3,'F');
         doc.setFont('helvetica','bold'); doc.setFontSize(6.5); doc.setTextColor(83,98,127); doc.text(`${rot}  ${m.com}/${m.total}`,x+2.2,y+4.6);
         doc.setFontSize(12); doc.setTextColor(...(m.pct==null?[83,98,127]:corNivel(m.pct))); doc.text(m.pct!=null?Math.round(m.pct)+'%':'–',x+2.2,y+9.3);
