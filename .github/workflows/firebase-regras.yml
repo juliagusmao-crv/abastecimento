@@ -17,7 +17,7 @@ jobs:
   publicar:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Colocar o e-mail da administradora nas regras
         env:
@@ -26,9 +26,9 @@ jobs:
           if [ -z "$ADMIN_EMAIL" ]; then echo "Falta o segredo ADMIN_EMAIL"; exit 1; fi
           sed -i "s/EMAIL_DA_ADMINISTRADORA/$(echo "$ADMIN_EMAIL" | tr 'A-Z' 'a-z')/" firestore.rules
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Publicar no Firebase
         env:
@@ -36,6 +36,18 @@ jobs:
         run: |
           if [ -z "$CHAVE" ]; then echo "Falta o segredo FIREBASE_SERVICE_ACCOUNT"; exit 1; fi
           printf '%s' "$CHAVE" > "$RUNNER_TEMP/chave.json"
+          # confere se a chave colada é um JSON válido de conta de serviço (sem mostrar a chave)
+          node -e 'const k=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(k.type!=="service_account"||!k.private_key) throw new Error("não é uma chave de conta de serviço"); console.log("Chave do projeto:",k.project_id)' "$RUNNER_TEMP/chave.json" \
+            || { echo "::error::O segredo FIREBASE_SERVICE_ACCOUNT não é o conteúdo completo do arquivo .json da conta de serviço."; rm -f "$RUNNER_TEMP/chave.json"; exit 1; }
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/chave.json"
-          npx -y firebase-tools@13 deploy --only firestore:rules --project abastecimento-crv --non-interactive
+          set +e
+          npx -y firebase-tools@13 deploy --only firestore:rules --project abastecimento-crv --non-interactive > "$RUNNER_TEMP/saida.txt" 2>&1
+          codigo=$?
+          set -e
+          cat "$RUNNER_TEMP/saida.txt"
           rm -f "$RUNNER_TEMP/chave.json"
+          if [ $codigo -ne 0 ]; then
+            # mostra o motivo do erro também como anotação (fica visível no resumo da execução)
+            grep -iE "error|denied|permission|forbidden|enable|api" "$RUNNER_TEMP/saida.txt" | grep -v "private_key" | tail -6 | while IFS= read -r linha; do echo "::error::$linha"; done
+            exit $codigo
+          fi
