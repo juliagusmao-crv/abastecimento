@@ -946,22 +946,62 @@ img{max-width:100%}
     S.leituras.forEach(l=>{ if(l.frotaId===frotaId && l.horimetro!=null && (l.quando||'')<ref && (!r || l.quando>r.quando)) r=l; });
     return r;
   }
+  // Lê a mensagem mesmo fora do modelo. Âncoras = números de frota cadastrados (ou o que vier depois de "FROTA").
+  // Para cada frota, o trecho vai até a próxima frota; dentro dele procura % e horímetro, com ou sem rótulo.
   function interpretarMensagem(texto){
-    const blocos=[]; let atual=null;
-    String(texto||'').split(/\r?\n/).forEach(bruta=>{
-      const L=semAcento(bruta).toUpperCase().replace(/\s+/g,' ').trim(); if(!L) return;
-      let m;
-      if((m=L.match(/^\*?FROTA\b\*?\s*[:\-–]?\s*(.*)$/))){ atual={codigo:((m[1].match(/\d+/)||[''])[0]),pctTxt:null,horTxt:null}; blocos.push(atual); return; }
-      if(!atual) return; // títulos e linhas antes da primeira frota
-      const resto = s => s.replace(/^[^:\-–\d]*[:\-–]?\s*/,'');
-      if(/^\*?(HORIM|HORAS?(?![A-Z])|HR(?![A-Z])|H\.?\s?R\.?(?![A-Z]))/.test(L)){ atual.horTxt=resto(L); return; }
-      if(/^\*?(PORCENT|PERCENT|NIVEL|COMBUST|%)/.test(L)){ atual.pctTxt=resto(L); return; }
-    });
+    const codigos=new Set((S.frotasTodas||S.frotas||[]).map(v=>String(v.codigo)));
+    let T=semAcento(String(texto||'')).toUpperCase().replace(/[*_~]/g,' ');
+    // frações e palavras de nível viram porcentagem (antes de apagar datas, para "3/4" não sumir)
+    T=T.replace(/\b1\s*\/\s*2\b|\bMEIO( TANQUE)?\b|\bMETADE\b/g,' 50% ').replace(/\b3\s*\/\s*4\b/g,' 75% ').replace(/\b1\s*\/\s*4\b/g,' 25% ')
+       .replace(/\bTANQUE CHEIO\b|\bCHEIO\b|\bCOMPLETO\b/g,' 100% ').replace(/\bVAZIO\b|\bSECO\b/g,' 0% ')
+       .replace(/\b\d{1,2}[:H]\d{2}\b/g,' ')                      // horários (06:00, 6h30)
+       .replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g,' ')            // datas (30/10)
+       .replace(/[\u2013\u2014]/g,'-')
+       .replace(/\bFRENTE\s*\d+\b/g,' ').replace(/\bTURNO\s*\w+\b/g,' ').replace(/\bFAZENDA\s*\d+\b/g,' ');
+    const ancoras=[]; let m;
+    const reNum=/\d[\d.,]*/g;
+    while((m=reNum.exec(T))){
+      const tok=m[0].replace(/[.,]+$/,''), dig=tok.replace(/[.,]/g,''), antes=T.slice(Math.max(0,m.index-14),m.index);
+      if(/(HORIM\w*|HORAS?|HR|H\.R\.?|HOR)\s*[:=\-]?\s*$/.test(antes)) continue;      // é horímetro, não frota
+      if(/(PORCENT\w*|PERCENT\w*|NIVEL|COMBUST\w*)\s*[:=\-]?\s*$/.test(antes)) continue;
+      const temRotulo=/FROTA\s*[:=\-N°º.]*\s*$/.test(antes);
+      if(codigos.has(dig) || (temRotulo && dig.length>=3)) ancoras.push({codigo:dig, ini:m.index, fim:m.index+m[0].length});
+    }
+    const blocos=ancoras.map((a,i)=>({codigo:a.codigo, seg:T.slice(a.fim, i+1<ancoras.length?ancoras[i+1].ini:T.length)}));
     const vistos={}, duplicadas=[];
-    blocos.forEach((b,i)=>{ if(!b.codigo) return; if(vistos[b.codigo]!==undefined){ duplicadas.push(b.codigo); blocos[vistos[b.codigo]]=null; } vistos[b.codigo]=i; });
-    const linhas=blocos.filter(Boolean).map(b=>{ const h=lerHorimetro(b.horTxt), p=lerPorcentagem(b.pctTxt);
-      return { codigo:b.codigo, pct: p?String(p.valor):'', hor: h?String(h.valor):'', casas: h?h.casas:0, salvar:true }; });
+    blocos.forEach((b,i)=>{ if(vistos[b.codigo]!==undefined){ duplicadas.push(b.codigo); blocos[vistos[b.codigo]]=null; } vistos[b.codigo]=i; });
+    const linhas=blocos.filter(Boolean).map(b=>{
+      let seg=b.seg.replace(/\bFROTA\b/g,' '), pct='', hor='';
+      // com rótulo
+      let r=seg.match(/(HORIM\w*|HORAS?|HR|H\.R\.?|HOR)\s*[:=\-]?\s*(\d[\d.,]*)/);
+      if(r){ hor=r[2].replace(/[.,]+$/,''); seg=seg.replace(r[0],' '); }
+      r=seg.match(/(\d{1,3}(?:[.,]\d+)?)\s*%/) || seg.match(/(?:PORCENT\w*|PERCENT\w*|NIVEL|COMBUST\w*|TANQUE)\s*(?:DE\s+\w+\s*)?[:=\-]?\s*(\d{1,3}(?:[.,]\d+)?)/);
+      if(r){ pct=r[1]; seg=seg.replace(r[0],' '); }
+      // sem rótulo: número pequeno inteiro = %, número grande ou com decimal = horímetro
+      const soltos=(seg.match(/\d[\d.,]*/g)||[]).map(x=>x.replace(/[.,]+$/,'')).filter(Boolean);
+      soltos.forEach(x=>{ const d=x.replace(/[.,]/g,''); const pequeno=!/[.,]/.test(x)&&d.length<=3&&Number(d)<=100;
+        if(pequeno&&pct==='') pct=d; else if(!pequeno&&hor==='') hor=x; });
+      const p=lerPorcentagem(pct);
+      return { codigo:b.codigo, pct:p?String(p.valor):'', hor, salvar:true };
+    });
     return { linhas, duplicadas:[...new Set(duplicadas)] };
+  }
+  // Escolhe a leitura do horímetro que faz sentido com a última leitura da frota.
+  // Ex.: "8.385" com anterior 8.380 h -> 8385; "83855" com anterior 8.380 h -> 8385,5.
+  function resolverHorimetro(txt, frotaId, quandoISO){
+    const base=lerHorimetro(txt); if(!base) return null;
+    const ant=frotaId?leituraAnterior(frotaId,quandoISO):null;
+    if(!ant||ant.horimetro==null) return {...base, ajustado:false};
+    const a=Number(ant.horimetro), ref=quandoISO?new Date(quandoISO):new Date(), dias=Math.max(1,(ref-new Date(ant.quando))/864e5), max=a+Math.max(24*dias,24)+2;
+    const ok=v=>v>=a&&v<=max;
+    if(ok(base.valor)) return {...base, ajustado:false};
+    const t=(String(txt).match(/\d[\d.,]*/)||[''])[0].replace(/[.,]+$/,''), dig=t.replace(/[.,]/g,''), cands=[];
+    const k=Math.max(t.lastIndexOf('.'),t.lastIndexOf(','));
+    if(k>=0){ cands.push(Number(t.slice(0,k).replace(/[.,]/g,'')+'.'+t.slice(k+1))); cands.push(Number(dig)); }
+    if(dig.length>=2){ cands.push(Number(dig)/10); cands.push(Number(dig)/100); }
+    const bons=cands.filter(v=>isFinite(v)&&ok(v)).sort((x,y)=>x-y);
+    if(bons.length){ const v=Math.round(bons[0]*100)/100; return {valor:v, casas:(String(v).split('.')[1]||'').length, ajustado:true, anterior:a}; }
+    return {...base, ajustado:false};
   }
   // devolve [{nivel:'erro'|'alerta'|'info', msg}] para uma linha da pré-visualização.
   // "erro" = a linha não é salva (só frota inexistente ou % impossível). O resto é salvo e fica marcado.
@@ -974,9 +1014,10 @@ img{max-width:100%}
     if(pS===''){ st.push({nivel:'info',msg:l.faltou?'não veio na mensagem: será salva como informação não enviada':'informação não enviada'}); }
     else { const p=Number(pS); if(!isFinite(p)||p<0||p>100||!Number.isInteger(p)) st.push({nivel:'erro',msg:'porcentagem inválida (0 a 100): corrija ou a linha não será salva'}); }
     if(hS===''){ if(v&&v.tipo==='Colhedora'&&pS!=='') st.push({nivel:'alerta',msg:'horímetro não enviado'}); }
-    else { const h=lerHorimetro(hS);
+    else { const h=resolverHorimetro(hS, v&&v.id, quandoISO); l.horValor=h?h.valor:null;
       if(!h){ l.horDescartar={valor:hS,motivo:'horímetro inválido'}; st.push({nivel:'alerta',msg:'horímetro inválido: será salva só a %'}); }
       else {
+        if(h.ajustado) st.push({nivel:'info',msg:`horímetro lido como ${nf1.format(h.valor)} h (ajustado pela última leitura, ${nf1.format(h.anterior)} h)`});
         if(h.casas>1) st.push({nivel:'alerta',msg:`${h.casas} casas decimais, conferir digitação`});
         const ant=v&&leituraAnterior(v.id,quandoISO);
         if(ant&&ant.horimetro!=null){
@@ -993,7 +1034,7 @@ img{max-width:100%}
   const IMP={linhas:[],duplicadas:[],texto:''};
   const frotasPorCodigo = () => { const m={}; S.frotas.forEach(v=>m[String(v.codigo)]=v); return m; };
   function impQuando(){ const d=$('#imp-data').value, h=$('#imp-hora').value; return (d&&h)?new Date(d+'T'+h).toISOString():null; }
-  function impPills(st){ return st.length ? st.map(x=>`<span class="st-pill st-${x.nivel}">${x.nivel==='erro'?'Erro':x.nivel==='info'?'Não enviada':'Alerta'}: ${esc(x.msg)}</span>`).join('') : '<span class="st-pill st-ok">OK</span>'; }
+  function impPills(st){ return st.length ? st.map(x=>`<span class="st-pill st-${x.nivel}">${x.nivel==='erro'?'Erro':x.nivel==='info'?(/horímetro lido/.test(x.msg)?'Ajustado':'Não enviada'):'Alerta'}: ${esc(x.msg)}</span>`).join('') : '<span class="st-pill st-ok">OK</span>'; }
   function impAtualizarLinha(i){
     const l=IMP.linhas[i], tr=document.querySelector(`#imp-linhas tr[data-i="${i}"]`); if(!tr) return;
     const fm=frotasPorCodigo(), v=fm[String(l.codigo).trim()];
@@ -1039,7 +1080,7 @@ img{max-width:100%}
     if(new Date(quando).getTime()>Date.now()+10*6e4){ msg.className='msg err'; msg.textContent='O horário informado está no futuro.'; return; }
     const fm=frotasPorCodigo();
     const itens=boas.map(({l})=>{ const h=String(l.hor).trim(), p=String(l.pct).trim(), hh=(h===''||l.horDescartar)?null:lerHorimetro(h);
-      return {frotaId:fm[String(l.codigo).trim()].id,pct:p===''?null:Number(p.replace(',','.')),horimetro:hh?hh.valor:null,horRejeitado:l.horDescartar||null,quando,responsavel:resp}; });
+      return {frotaId:fm[String(l.codigo).trim()].id,pct:p===''?null:Number(p.replace(',','.')),horimetro:hh?(l.horValor!=null?l.horValor:hh.valor):null,horRejeitado:l.horDescartar||null,quando,responsavel:resp}; });
     const b=$('#btn-imp-salvar'); b.disabled=true; msg.textContent='Salvando…';
     try{
       const ref=db.collection('importacoes').doc();
@@ -1100,7 +1141,8 @@ img{max-width:100%}
       const id=tr.dataset.frota, v=S.frotas.find(x=>x.id===id); if(!v) return;
       const ip=tr.querySelector('.in-pct'), ih=tr.querySelector('.in-hor'), pS=ip.value.trim(), hS=ih.value.trim();
       if(pS===''&&hS==='') return; // linha em branco: não lança nada
-      const pct=pS===''?null:Number(pS.replace(',','.')), hh=hS===''?null:lerHorimetro(hS); let hor=hh?hh.valor:null, horRejeitado=null;
+      const qRef0=(dV&&hV)?new Date(dV+'T'+hV).toISOString():null, pct=pS===''?null:Number(pS.replace(',','.')), hh=hS===''?null:resolverHorimetro(hS,id,qRef0); let hor=hh?hh.valor:null, horRejeitado=null;
+      if(hh&&hh.ajustado) avisos.push(`${v.codigo}: horímetro lido como ${nf1.format(hh.valor)} h`);
       if(pct!=null&&!(pct>=0&&pct<=100)){ ip.classList.add('bad'); pulados.push(`${v.codigo} (% inválida)`); return; }
       if(hS!==''&&!hh){ ih.classList.add('bad'); horRejeitado={valor:hS,motivo:'horímetro inválido'}; avisos.push(`${v.codigo}: horímetro inválido, salva só a %`); }
       const qRef=(dV&&hV)?new Date(dV+'T'+hV).toISOString():null, ant=leituraAnterior(id,qRef);
