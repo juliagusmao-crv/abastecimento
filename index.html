@@ -573,7 +573,8 @@ img{max-width:100%}
     if(!codigo||!frenteId) throw new Error('Informe o número da frota e a frente.');
     if(S.frotas.some(v=>String(v.codigo).toLowerCase()===codigo.toLowerCase())) throw new Error('Essa frota já está cadastrada.');
     const ret=(S.frotasTodas||[]).find(v=>v.retirada&&String(v.codigo).toLowerCase()===codigo.toLowerCase());
-    const id=ret?ret.id:'v-'+codigo.replace(/[^A-Za-z0-9]/g,''), agora=new Date().toISOString(), b=db.batch(), f=S.frentes.find(x=>x.id===frenteId);
+    let id=ret?ret.id:'v-'+codigo.replace(/[^A-Za-z0-9]/g,''); if(!ret&&(S.frotasTodas||[]).some(x=>x.id===id)) id='v-'+codigo.replace(/[^A-Za-z0-9]/g,'')+'-'+uid().slice(0,5);
+    const agora=new Date().toISOString(), b=db.batch(), f=S.frentes.find(x=>x.id===frenteId);
     b.set(db.collection('frotas').doc(id),{codigo,tipo:o.tipo==='Colhedora'?'Colhedora':'Trator',modelo:String(o.modelo||'').trim(),frenteId,retirada:false,
       alteradaPor:S.sessao.nome,alteradaEm:agora},{merge:true});
     b.set(db.collection('alteracoes').doc(),{tipo:ret?'frota_reativada':'frota_adicionada',frotaId:id,frente:f?f.nome:'',depois:`${o.tipo} ${codigo} · ${f?f.nome:''}`,...autor(),em:agora});
@@ -941,7 +942,10 @@ img{max-width:100%}
     const m=String(txt||'').match(/-?\d+(?:[.,]\d+)?/); if(!m) return null;
     const v=Number(m[0].replace(',','.')); return isFinite(v) ? {valor:v, inteiro:Number.isInteger(v)} : null;
   }
+  // Última leitura de horímetro antes do horário informado. Só vale para colhedoras:
+  // nos tratores o horímetro é opcional e não é comparado.
   function leituraAnterior(frotaId, quandoISO){
+    const fr=(S.frotasTodas||S.frotas||[]).find(x=>x.id===frotaId); if(!fr||fr.tipo!=='Colhedora') return null;
     const ref=quandoISO||new Date().toISOString(); let r=null;
     S.leituras.forEach(l=>{ if(l.frotaId===frotaId && l.horimetro!=null && (l.quando||'')<ref && (!r || l.quando>r.quando)) r=l; });
     return r;
@@ -1022,7 +1026,8 @@ img{max-width:100%}
         const ant=v&&leituraAnterior(v.id,quandoISO);
         if(ant&&ant.horimetro!=null){
           const a=Number(ant.horimetro);
-          if(h.valor<a){ l.horDescartar={valor:hS,motivo:`menor que o anterior ${nf1.format(a)} h`}; st.push({nivel:'alerta',msg:`menor que o anterior (${nf1.format(a)} h em ${quando(ant.quando)}): será salva só a %, o horímetro fica para conferir`}); }
+          if(h.valor<a&&l.forcarHor){ st.push({nivel:'info',msg:`horímetro aceito mesmo menor que o anterior (${nf1.format(a)} h)`}); }
+          else if(h.valor<a){ l.horDescartar={valor:hS,motivo:`menor que o anterior ${nf1.format(a)} h`}; st.push({nivel:'alerta',msg:`menor que o anterior (${nf1.format(a)} h, informado ${quando(ant.quando)} por ${ant.responsavel||'?'}): será salva só a %. Se o novo estiver certo, clique em Usar este horímetro`}); }
           else { const ref=quandoISO?new Date(quandoISO):new Date(); const dias=Math.max(1,(ref-new Date(ant.quando))/864e5);
             if(h.valor-a>24*dias) st.push({nivel:'alerta',msg:`salto grande (+${nf1.format(h.valor-a)} h), conferir`}); }
         }
@@ -1034,13 +1039,13 @@ img{max-width:100%}
   const IMP={linhas:[],duplicadas:[],texto:''};
   const frotasPorCodigo = () => { const m={}; S.frotas.forEach(v=>m[String(v.codigo)]=v); return m; };
   function impQuando(){ const d=$('#imp-data').value, h=$('#imp-hora').value; return (d&&h)?new Date(d+'T'+h).toISOString():null; }
-  function impPills(st){ return st.length ? st.map(x=>`<span class="st-pill st-${x.nivel}">${x.nivel==='erro'?'Erro':x.nivel==='info'?(/horímetro lido/.test(x.msg)?'Ajustado':'Não enviada'):'Alerta'}: ${esc(x.msg)}</span>`).join('') : '<span class="st-pill st-ok">OK</span>'; }
+  function impPills(st){ return st.length ? st.map(x=>`<span class="st-pill st-${x.nivel}">${x.nivel==='erro'?'Erro':x.nivel==='info'?(/não enviada/.test(x.msg)?'Não enviada':'Ajustado'):'Alerta'}: ${esc(x.msg)}</span>`).join('') : '<span class="st-pill st-ok">OK</span>'; }
   function impAtualizarLinha(i){
     const l=IMP.linhas[i], tr=document.querySelector(`#imp-linhas tr[data-i="${i}"]`); if(!tr) return;
     const fm=frotasPorCodigo(), v=fm[String(l.codigo).trim()];
     l.st=validarImport(l,fm,ultimas(),impQuando());
     tr.querySelector('.eq').innerHTML = v?`<span class="tag ${v.tipo==='Colhedora'?'col':''}">${esc(v.tipo)}</span> ${esc(((S.frentes.find(f=>f.id===v.frenteId)||{}).nome)||'')}`:'–';
-    tr.querySelector('.st').innerHTML=impPills(l.st); tr.classList.toggle('off',!l.salvar);
+    tr.querySelector('.st').innerHTML=impPills(l.st)+(l.horDescartar&&/^menor/.test(l.horDescartar.motivo)?` <button class="btn-link edit" data-forcarhor="${i}" type="button">Usar este horímetro</button>`:''); tr.classList.toggle('off',!l.salvar);
     impResumo();
   }
   function impResumo(){
@@ -1532,6 +1537,7 @@ img{max-width:100%}
         S.frotas.filter(v=>frentesMsg.has(v.frenteId)&&!vindas.has(String(v.codigo))).sort((a,b)=>(a.tipo===b.tipo?0:a.tipo==='Colhedora'?-1:1)||byCode(a,b))
           .forEach(v=>IMP.linhas.push({codigo:String(v.codigo),pct:'',hor:'',casas:0,salvar:true,faltou:true})); }
       m.textContent=`${r.linhas.length} frota(s) lida(s) da mensagem. Confira a tabela abaixo.`; impMontar(); }
+    else if(d.forcarhor!==undefined){ const i=Number(d.forcarhor); if(IMP.linhas[i]){ IMP.linhas[i].forcarHor=true; impAtualizarLinha(i); } }
     else if(t.id==='btn-imp-salvar'){ await impSalvar(); }
     else if(t.id==='btn-salvar-tudo'){ await salvarFrentes([...document.querySelectorAll('.lote')],$('#msg-tudo')); }
     else if(d.resetu!==undefined){ const m=$('#msg-usu'); if(!d.resetu) return; try{ await api('redefinirSenha',null,d.resetu); if(m){ m.className='msg'; m.textContent=`Enviamos para ${d.resetu} um e-mail para criar uma senha nova.`; } }catch(err){ if(m){ m.className='msg err'; m.textContent=erroTxt(err); } } }
