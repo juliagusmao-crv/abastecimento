@@ -882,7 +882,7 @@ img{max-width:100%}
     const frentesAdm=[...(S.frentesTodas||frentes)].sort(byNome);
     $('#list-f').innerHTML = frentesAdm.length ? frentesAdm.map(f=>{ const n=(S.frotasTodas||[]).filter(v=>v.frenteId===f.id&&!v.retirada).length;
       const faz = S.editFaz===f.id
-        ? `<span class="inline-edit"><input type="text" id="faz-${esc(f.id)}" value="${esc(f.fazenda||'')}" placeholder="Fazenda" aria-label="Fazenda da ${esc(f.nome)}"><input type="text" id="resp-${esc(f.id)}" value="${esc(f.responsavel||'')}" placeholder="Responsável" aria-label="Responsável da ${esc(f.nome)}"><button class="btn-primary btn-sm" data-savefaz="${esc(f.id)}" type="button">Salvar</button><button class="btn-ghost btn-sm" data-cancel type="button">Cancelar</button></span>`
+        ? `<span class="inline-edit"><input type="text" id="nome-${esc(f.id)}" value="${esc(f.nome||'')}" placeholder="Nome da frente" aria-label="Nome da frente"><input type="text" id="faz-${esc(f.id)}" value="${esc(f.fazenda||'')}" placeholder="Fazenda" aria-label="Fazenda da ${esc(f.nome)}"><input type="text" id="resp-${esc(f.id)}" value="${esc(f.responsavel||'')}" placeholder="Responsável" aria-label="Responsável da ${esc(f.nome)}"><button class="btn-primary btn-sm" data-savefaz="${esc(f.id)}" type="button">Salvar</button><button class="btn-ghost btn-sm" data-cancel type="button">Cancelar</button></span>`
         : `<span>Fazenda: ${f.fazenda?esc(f.fazenda):'<span class="hint" style="display:inline">não informada</span>'} · Responsável: ${f.responsavel?esc(f.responsavel):'<span class="hint" style="display:inline">não informado</span>'}</span> <button class="btn-link edit" data-editfaz="${esc(f.id)}" type="button">Alterar</button>`;
       const act = S.confirm==='f:'+f.id
         ? `<span class="confirm">${n?`<span class="hint">Retire ou mude as ${n} frota(s) antes.</span>`:`<button class="btn-danger" data-delf="${esc(f.id)}" type="button">Excluir frente</button>`}<button class="btn-ghost" data-cancel type="button">Cancelar</button></span>`
@@ -1514,7 +1514,11 @@ img{max-width:100%}
       try{ await alterarFazenda(d.savefazg,v); }catch(err){ falhou(err); } render(); }
     else if(d.editfaz){ S.editFaz=d.editfaz; render(); const i=document.getElementById('faz-'+d.editfaz); if(i) i.focus(); }
     else if(d.savefaz){ const i=document.getElementById('faz-'+d.savefaz), j=document.getElementById('resp-'+d.savefaz);
-      const v=i?i.value.trim():'', r=j?j.value.trim():''; S.editFaz=null; try{ await mudar('salvar','frentes',{id:d.savefaz,fazenda:v,responsavel:r}); }catch(err){ falhou(err); } }
+      const k=document.getElementById('nome-'+d.savefaz), f0=(S.frentesTodas||[]).find(x=>x.id===d.savefaz)||{};
+      const v=i?i.value.trim():'', r=j?j.value.trim():'', nm=(k?k.value.trim():'')||f0.nome;
+      if(nm!==f0.nome&&(S.frentesTodas||[]).some(x=>x.id!==d.savefaz&&x.nome.toLowerCase()===nm.toLowerCase())){ falhou(new Error('Já existe uma frente com esse nome.')); return; }
+      S.editFaz=null; try{ await mudar('salvar','frentes',{id:d.savefaz,nome:nm,fazenda:v,responsavel:r});
+        if(nm!==f0.nome) await db.collection('alteracoes').doc().set({tipo:'frente_renomeada',frenteId:d.savefaz,antes:f0.nome||'',depois:nm,...autor(),em:new Date().toISOString()}).catch(()=>{}); }catch(err){ falhou(err); } }
     else if(d.delv){ S.confirm=null; try{ await retirarFrota(d.delv,true); }catch(err){ falhou(err); } render(); }
     else if(d.editfrota){ S.confirm=null; S.editFrota=d.editfrota; render(); const i=document.querySelector(`tr[data-edv="${d.editfrota}"] .efv-cod`); if(i) i.focus(); }
     else if(d.salvfrota){ const tr=document.querySelector(`tr[data-edv="${d.salvfrota}"]`), m=tr.querySelector('[data-msgfrota]'); t.disabled=true;
