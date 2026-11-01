@@ -537,7 +537,7 @@ img{max-width:100%}
     const pVaz=String(novo.pct??'').trim()==='', pct=pVaz?null:Number(String(novo.pct).replace(',','.'));
     if(!pVaz&&(!(pct>=0&&pct<=100)||!Number.isInteger(pct))) throw new Error('A porcentagem precisa ser um número inteiro de 0 a 100 (ou vazia, se não foi enviada).');
     const hS=String(novo.horimetro??'').trim(); let hor=null;
-    if(hS!==''){ const h=lerHorimetro(hS); if(!h) throw new Error('Horímetro inválido.'); hor=h.valor; }
+    if(hS!==''){ const h=lerHorimetro(hS); if(!h) throw new Error('Horímetro inválido.'); if(h.valor>LIMITE_HORIMETRO) throw new Error(`Horímetro acima de ${nf1.format(LIMITE_HORIMETRO)} h: confira o ponto/vírgula.`); hor=h.valor; }
     const q=new Date(novo.quando); if(!novo.quando||isNaN(q)) throw new Error('Informe a data e a hora informadas.');
     if(q.getTime()>Date.now()+10*6e4) throw new Error('O horário informado está no futuro.');
     const resp=String(novo.responsavel||'').trim()||'não informado';
@@ -944,11 +944,25 @@ img{max-width:100%}
   }
   // Última leitura de horímetro antes do horário informado. Só vale para colhedoras:
   // nos tratores o horímetro é opcional e não é comparado.
-  function leituraAnterior(frotaId, quandoISO){
-    const fr=(S.frotasTodas||S.frotas||[]).find(x=>x.id===frotaId); if(!fr||fr.tipo!=='Colhedora') return null;
+  // Nenhuma máquina da frota passa disso; acima é erro de digitação (ponto/vírgula no lugar errado).
+  const LIMITE_HORIMETRO=30000;
+  function leituraAnterior(frotaId, quandoISO, qualquerTipo){
+    const fr=(S.frotasTodas||S.frotas||[]).find(x=>x.id===frotaId); if(!fr||(!qualquerTipo&&fr.tipo!=='Colhedora')) return null;
     const ref=quandoISO||new Date().toISOString(); let r=null;
-    S.leituras.forEach(l=>{ if(l.frotaId===frotaId && l.horimetro!=null && (l.quando||'')<ref && (!r || l.quando>r.quando)) r=l; });
+    // leituras antigas acima do limite (digitadas erradas) não servem de referência
+    S.leituras.forEach(l=>{ if(l.frotaId===frotaId && l.horimetro!=null && Number(l.horimetro)<=LIMITE_HORIMETRO && (l.quando||'')<ref && (!r || l.quando>r.quando)) r=l; });
     return r;
+  }
+  // Horímetro acima do limite: tenta a vírgula em outra posição e fica com o valor mais realista
+  // (o mais próximo da última leitura da frota; sem leitura, o maior valor abaixo do limite).
+  function corrigirAcimaLimite(txt, frotaId, quandoISO){
+    const dig=((String(txt).match(/\d[\d.,]*/)||[''])[0]).replace(/[.,]/g,'').replace(/^0+(?=\d)/,'');
+    const cands=[]; for(let k=0;k<=4&&k<dig.length;k++){ const v=Math.round(Number(dig)/Math.pow(10,k)*100)/100; if(v>0&&v<=LIMITE_HORIMETRO) cands.push(v); }
+    if(!cands.length) return null;
+    const ant=frotaId?leituraAnterior(frotaId,quandoISO,true):null; let v;
+    if(ant){ const a=Number(ant.horimetro), dist=x=>x>=a?x-a:(a-x)*3; v=cands.slice().sort((x,y)=>dist(x)-dist(y))[0]; }
+    else v=cands[0];
+    return {valor:v, casas:(String(v).split('.')[1]||'').length, ajustado:true, acimaLimite:true, anterior:ant?Number(ant.horimetro):null};
   }
   // Lê a mensagem mesmo fora do modelo. Âncoras = números de frota cadastrados (ou o que vier depois de "FROTA").
   // Para cada frota, o trecho vai até a próxima frota; dentro dele procura % e horímetro, com ou sem rótulo.
@@ -994,6 +1008,7 @@ img{max-width:100%}
   // Ex.: "8.385" com anterior 8.380 h -> 8385; "83855" com anterior 8.380 h -> 8385,5.
   function resolverHorimetro(txt, frotaId, quandoISO){
     const base=lerHorimetro(txt); if(!base) return null;
+    if(base.valor>LIMITE_HORIMETRO){ const c=corrigirAcimaLimite(txt,frotaId,quandoISO); if(c) return c; }
     const ant=frotaId?leituraAnterior(frotaId,quandoISO):null;
     if(!ant||ant.horimetro==null) return {...base, ajustado:false};
     const a=Number(ant.horimetro), ref=quandoISO?new Date(quandoISO):new Date(), dias=Math.max(1,(ref-new Date(ant.quando))/864e5), max=a+Math.max(24*dias,24)+2;
@@ -1021,7 +1036,8 @@ img{max-width:100%}
     else { const h=resolverHorimetro(hS, v&&v.id, quandoISO); l.horValor=h?h.valor:null;
       if(!h){ l.horDescartar={valor:hS,motivo:'horímetro inválido'}; st.push({nivel:'alerta',msg:'horímetro inválido: será salva só a %'}); }
       else {
-        if(h.ajustado) st.push({nivel:'info',msg:`horímetro lido como ${nf1.format(h.valor)} h (ajustado pela última leitura, ${nf1.format(h.anterior)} h)`});
+        if(h.acimaLimite) st.push({nivel:'info',msg:`horímetro ${hS} passa de ${nf1.format(LIMITE_HORIMETRO)} h: lido como ${nf1.format(h.valor)} h`+(h.anterior!=null?` (última leitura ${nf1.format(h.anterior)} h)`:'')});
+        else if(h.ajustado) st.push({nivel:'info',msg:`horímetro lido como ${nf1.format(h.valor)} h (ajustado pela última leitura, ${nf1.format(h.anterior)} h)`});
         if(h.casas>1) st.push({nivel:'alerta',msg:`${h.casas} casas decimais, conferir digitação`});
         const ant=v&&leituraAnterior(v.id,quandoISO);
         if(ant&&ant.horimetro!=null){
@@ -1147,7 +1163,7 @@ img{max-width:100%}
       const ip=tr.querySelector('.in-pct'), ih=tr.querySelector('.in-hor'), pS=ip.value.trim(), hS=ih.value.trim();
       if(pS===''&&hS==='') return; // linha em branco: não lança nada
       const qRef0=(dV&&hV)?new Date(dV+'T'+hV).toISOString():null, pct=pS===''?null:Number(pS.replace(',','.')), hh=hS===''?null:resolverHorimetro(hS,id,qRef0); let hor=hh?hh.valor:null, horRejeitado=null;
-      if(hh&&hh.ajustado) avisos.push(`${v.codigo}: horímetro lido como ${nf1.format(hh.valor)} h`);
+      if(hh&&hh.ajustado) avisos.push(`${v.codigo}: horímetro ${hh.acimaLimite?hS+' passa de '+nf1.format(LIMITE_HORIMETRO)+' h, ':''}lido como ${nf1.format(hh.valor)} h`);
       if(pct!=null&&!(pct>=0&&pct<=100)){ ip.classList.add('bad'); pulados.push(`${v.codigo} (% inválida)`); return; }
       if(hS!==''&&!hh){ ih.classList.add('bad'); horRejeitado={valor:hS,motivo:'horímetro inválido'}; avisos.push(`${v.codigo}: horímetro inválido, salva só a %`); }
       const qRef=(dV&&hV)?new Date(dV+'T'+hV).toISOString():null, ant=leituraAnterior(id,qRef);
