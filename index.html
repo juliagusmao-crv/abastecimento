@@ -986,18 +986,16 @@ img{max-width:100%}
     const reNum=/\d[\d.,]*/g;
     while((m=reNum.exec(T))){
       const tok=m[0].replace(/[.,]+$/,''), dig=tok.replace(/[.,]/g,''), antes=T.slice(Math.max(0,m.index-14),m.index);
-      if(/(HORIM\w*|HORAS?|HR|H\.R\.?|HOR)\s*[:=\-]?\s*$/.test(antes)) continue;      // é horímetro, não frota
-      if(/(PORCENT\w*|PERCENT\w*|NIVEL|COMBUST\w*)\s*[:=\-]?\s*$/.test(antes)) continue;
+      if(/(HORIM\w*|HORAS?|HR|H\.R\.?|HOR)[ \t]*[:=\-]?[ \t]*$/.test(antes)) continue;      // é horímetro, não frota
+      if(/(PORCENT\w*|PERCENT\w*|NIVEL|COMBUST\w*)[ \t]*[:=\-]?[ \t]*$/.test(antes)) continue;
       const temRotulo=/FROTA\s*[:=\-N°º.]*\s*$/.test(antes);
       if(codigos.has(dig) || (temRotulo && dig.length>=3)) ancoras.push({codigo:dig, ini:m.index, fim:m.index+m[0].length});
     }
     const blocos=ancoras.map((a,i)=>({codigo:a.codigo, seg:T.slice(a.fim, i+1<ancoras.length?ancoras[i+1].ini:T.length)}));
-    const vistos={}, duplicadas=[];
-    blocos.forEach((b,i)=>{ if(vistos[b.codigo]!==undefined){ duplicadas.push(b.codigo); blocos[vistos[b.codigo]]=null; } vistos[b.codigo]=i; });
-    const linhas=blocos.filter(Boolean).map(b=>{
+    const lidas=blocos.map(b=>{
       let seg=b.seg.replace(/\bFROTA\b/g,' '), pct='', hor='';
       // com rótulo
-      let r=seg.match(/(HORIM\w*|HORAS?|HR|H\.R\.?|HOR)\s*[:=\-]?\s*(\d[\d.,]*)/);
+      let r=seg.match(/(HORIM\w*|HORAS?|HR|H\.R\.?|HOR)[ \t]*[:=\-]?[ \t]*(\d[\d.,]*)/);
       if(r){ hor=r[2].replace(/[.,]+$/,''); seg=seg.replace(r[0],' '); }
       r=seg.match(/(\d{1,3}(?:[.,]\d+)?)\s*%/) || seg.match(/(?:PORCENT\w*|PERCENT\w*|NIVEL|COMBUST\w*|TANQUE)\s*(?:DE\s+\w+\s*)?[:=\-]?\s*(\d{1,3}(?:[.,]\d+)?)/);
       if(r){ pct=r[1]; seg=seg.replace(r[0],' '); }
@@ -1008,6 +1006,13 @@ img{max-width:100%}
       const p=lerPorcentagem(pct);
       return { codigo:b.codigo, pct:p?String(p.valor):'', hor, salvar:true };
     });
+    // Frota repetida na mensagem (ex.: um bloco só com as % e outro só com os horímetros):
+    // junta tudo numa linha só; se a mesma informação vier duas vezes, vale a que aparece por último.
+    const porCod={}, ordem=[], duplicadas=[];
+    lidas.forEach(l=>{ const c=porCod[l.codigo];
+      if(!c){ porCod[l.codigo]=l; ordem.push(l.codigo); return; }
+      duplicadas.push(l.codigo); if(l.pct!=='') c.pct=l.pct; if(l.hor!=='') c.hor=l.hor; });
+    const linhas=ordem.map(c=>porCod[c]);
     return { linhas, duplicadas:[...new Set(duplicadas)] };
   }
   // Escolhe a leitura do horímetro que faz sentido com a última leitura da frota.
@@ -1072,7 +1077,7 @@ img{max-width:100%}
   }
   function impResumo(){
     const fm=frotasPorCodigo(), av=[];
-    if(IMP.duplicadas.length) av.push(`Frota(s) repetida(s) na mensagem: <b>${IMP.duplicadas.map(esc).join(', ')}</b>. Foi usada a última informação de cada uma.`);
+    if(IMP.duplicadas.length) av.push(`Frota(s) repetida(s) na mensagem: <b>${IMP.duplicadas.map(esc).join(', ')}</b>. As informações foram juntadas; quando a mesma informação veio duas vezes, valeu a mais recente.`);
     const faltou=IMP.linhas.filter(l=>l.faltou).length;
     if(faltou) av.push(`<b>${faltou}</b> frota(s) da frente não vieram na mensagem e foram incluídas como <b>informação não enviada</b>. Desmarque se não quiser registrar.`);
     const sel=IMP.linhas.filter(l=>l.salvar), comErro=sel.filter(l=>(l.st||[]).some(x=>x.nivel==='erro')).length, alertas=sel.filter(l=>(l.st||[]).some(x=>x.nivel==='alerta')).length, nenv=sel.filter(l=>String(l.pct).trim()==='').length;
