@@ -688,7 +688,13 @@ img{max-width:100%}
   const temPct = l => !!l && l.pct!=null && !isNaN(l.pct);
   const pctTxt = l => temPct(l) ? Math.round(l.pct)+'%' : 'não enviada';
   const NAO_ENV = '<span class="chip nenv">informação não enviada</span>';
-  function ultimas(){ const u={}; S.leituras.forEach(l=>{ const c=u[l.frotaId]; if(!c || (l.quando||'')>(c.quando||'')) u[l.frotaId]=l; }); return u; }
+  // Última leitura de cada frota. Se dois lançamentos têm o mesmo horário informado (ex.: a % foi lançada
+  // depois, separada do horímetro), vale o lançado por último e o que faltar nele vem do outro.
+  function ultimas(){ const u={}; S.leituras.forEach(l=>{ const c=u[l.frotaId], q=l.quando||'', qc=c?(c.quando||''):'';
+      if(!c || q>qc) u[l.frotaId]=l;
+      else if(q===qc){ const [novo,velho]=(l.lancadoEm||'')>=(c.lancadoEm||'')?[l,c]:[c,l];
+        u[l.frotaId]={...novo, pct:temPct(novo)?novo.pct:velho.pct, horimetro:novo.horimetro!=null?novo.horimetro:velho.horimetro}; } });
+    return u; }
   function media(frotas,u){ const v=frotas.map(f=>u[f.id]).filter(temPct).map(l=>Number(l.pct)); return { pct: v.length ? v.reduce((a,b)=>a+b,0)/v.length : null, com: v.length, total: frotas.length }; }
   function relatorio(){
     const frenteId=$('#r-frente').value, de=$('#r-de').value, ate=$('#r-ate').value;
