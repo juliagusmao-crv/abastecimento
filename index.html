@@ -1411,9 +1411,12 @@ img{max-width:100%}
       doc.text(`Fazenda: ${f.fazenda||'não informada'}    Última informação: ${tUlt?quando(tUlt):'nenhuma'}`,mx+3,y+9.6);
       { const hD=tUlt?horasDesde(tUlt):Infinity;
         if(fs.length&&hD>LIMITE_DESATUALIZADO_H){ const txt=tUlt?`ATENÇÃO: DESATUALIZADO · HÁ ${fmtHoras(hD).toUpperCase()}`:'ATENÇÃO: SEM INFORMAÇÃO';
-          doc.setFont('helvetica','normal'); doc.setFontSize(7.8); const x0=mx+3+doc.getTextWidth(`Fazenda: ${f.fazenda||'não informada'}    Última informação: ${tUlt?quando(tUlt):'nenhuma'}`)+3;
-          doc.setFont('helvetica','bold'); doc.setFontSize(7); const tw=doc.getTextWidth(txt)+5;
-          doc.setFillColor(176,58,46); doc.roundedRect(x0,y+7.2,tw,3.8,1.9,1.9,'F'); doc.setTextColor(255,255,255); doc.text(txt,x0+2.5,y+9.8); doc.setTextColor(20,33,61); } }
+          // fica na linha do nome da frente, antes dos quadros de colhedoras/tratores (que começam em W-mx-84)
+          doc.setFont('helvetica','bold'); doc.setFontSize(11.5); const x0=mx+3+doc.getTextWidth(f.nome.toUpperCase())+3, lim=W-mx-84-2;
+          doc.setFontSize(7); let t2=txt; if(x0+doc.getTextWidth(t2)+5>lim) t2=tUlt?`DESATUALIZADO · ${fmtHoras(hD).toUpperCase()}`:'SEM INFORMAÇÃO';
+          if(x0+doc.getTextWidth(t2)+5>lim) t2='DESATUALIZADO';
+          const tw=doc.getTextWidth(t2)+5;
+          doc.setFillColor(176,58,46); doc.roundedRect(x0,y+2.3,tw,3.8,1.9,1.9,'F'); doc.setTextColor(255,255,255); doc.text(t2,x0+2.5,y+4.9); doc.setTextColor(20,33,61); } }
       const pill=(x,rot,m)=>{ const w=40; doc.setFillColor(...fundoNivel(m.pct)); doc.roundedRect(x,y+1.6,w,8.8,1.3,1.3,'F');
         doc.setFont('helvetica','bold'); doc.setFontSize(6.5); doc.setTextColor(83,98,127); doc.text(`${rot}  ${m.com}/${m.total}`,x+2.2,y+4.6);
         doc.setFontSize(12); doc.setTextColor(...(m.pct==null?[83,98,127]:corNivel(m.pct))); doc.text(m.pct!=null?Math.round(m.pct)+'%':'–',x+2.2,y+9.3);
