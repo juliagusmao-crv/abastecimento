@@ -537,7 +537,8 @@ img{max-width:100%}
     const pVaz=String(novo.pct??'').trim()==='', pct=pVaz?null:Number(String(novo.pct).replace(',','.'));
     if(!pVaz&&(!(pct>=0&&pct<=100)||!Number.isInteger(pct))) throw new Error('A porcentagem precisa ser um número inteiro de 0 a 100 (ou vazia, se não foi enviada).');
     const hS=String(novo.horimetro??'').trim(); let hor=null;
-    if(hS!==''){ const h=lerHorimetro(hS); if(!h) throw new Error('Horímetro inválido.'); if(h.valor>LIMITE_HORIMETRO) throw new Error(`Horímetro acima de ${nf1.format(LIMITE_HORIMETRO)} h: confira o ponto/vírgula.`); hor=h.valor; }
+    if(typeof novo.horimetro==='number') hor=novo.horimetro;
+    else if(hS!==''){ const h=lerHorimetro(hS); if(!h) throw new Error('Horímetro inválido.'); if(h.valor>LIMITE_HORIMETRO&&h.valor!==l.horimetro) throw new Error(`Horímetro acima de ${nf1.format(LIMITE_HORIMETRO)} h: confira o ponto/vírgula.`); hor=h.valor; }
     const q=new Date(novo.quando); if(!novo.quando||isNaN(q)) throw new Error('Informe a data e a hora informadas.');
     if(q.getTime()>Date.now()+10*6e4) throw new Error('O horário informado está no futuro.');
     const resp=String(novo.responsavel||'').trim()||'não informado';
@@ -555,6 +556,17 @@ img{max-width:100%}
         t.set(refNovo,{frotaId:l.frotaId,mes:mesNovo,itens:[...(sN.exists?(sN.data().itens||[]):[]),novoItem]},{merge:true}); }
       registrarAlteracao(t,{tipo:'correcao',lancId:id,frotaId:l.frotaId,antes,depois,motivo:ed.motivo});
     });
+  }
+  // Lançamentos da mesma frente com o mesmo horário informado (uma mensagem / um lote).
+  function mesmoLote(l){ const v=(S.frotasTodas||S.frotas).find(x=>x.id===l.frotaId); const fid=v?v.frenteId:null;
+    return (S.leituras||[]).filter(x=>x.quando===l.quando&&((S.frotasTodas||S.frotas).find(y=>y.id===x.frotaId)||{}).frenteId===fid); }
+  // Troca só o nome do responsável em todo o lote; %, horímetro e horário continuam como estão.
+  async function trocarRespLote(id, resp, motivo){
+    const l=(S.todas||[]).find(x=>x.id===id); if(!l) throw new Error('Lançamento não encontrado. Atualize a página.');
+    const nome=String(resp||'').trim(); if(!nome) throw new Error('Digite o nome do responsável.');
+    let n=0; for(const x of mesmoLote(l)){ if((x.responsavel||'')===nome) continue;
+      await editarLanc(x.id,{pct:x.pct,horimetro:x.horimetro,quando:x.quando,responsavel:nome},motivo||'troca do responsável no lançamento todo'); n++; }
+    return n;
   }
   // "Anular" não apaga: o lançamento continua no histórico, riscado, e sai dos cálculos.
   async function anularLanc(id, anular, motivo){
@@ -860,7 +872,7 @@ img{max-width:100%}
     const obsEd = l => { const e=l.edicoes||[]; if(!e.length) return ''; const u=e[e.length-1], a=u.antes||{};
       return `<div class="obs-edit">corrigido por <b>${esc(u.usuario||'')}</b> em ${quando(u.em)} · antes: ${a.pct!=null?Math.round(a.pct)+'%':'não enviada'}${a.horimetro!=null?' · '+nf1.format(a.horimetro)+' h':''} · ${quando(a.quando)} · ${esc(a.responsavel||'')}${u.motivo?` · motivo: ${esc(u.motivo)}`:''}${e.length>1?` · ${e.length} correções`:''}</div>`; };
     const linhaEdit = l => { const qd=new Date(l.quando), loc=new Date(qd.getTime()-qd.getTimezoneOffset()*6e4).toISOString().slice(0,16);
-      return `<tr class="editando" data-ed="${esc(l.id)}"><td class="acoes"><span class="confirm"><button class="btn-primary" data-edsalvar="${esc(l.id)}" type="button">Salvar correção</button><button class="btn-ghost" data-cancel type="button">Cancelar</button></span><div class="msg err" data-edmsg="${esc(l.id)}"></div></td><td><input type="datetime-local" class="w-hora ed-quando" value="${loc}" aria-label="Horário informado"></td><td class="num hint">${lanc(l)}</td><td>${l.f?esc(l.f.nome):'–'}</td><td><b>${esc(l.v.codigo)}</b></td><td>${esc(l.v.tipo)}</td>
+      return `<tr class="editando" data-ed="${esc(l.id)}"><td class="acoes"><span class="confirm"><button class="btn-primary" data-edsalvar="${esc(l.id)}" type="button">Salvar correção</button><button class="btn-ghost" data-cancel type="button">Cancelar</button></span>${(()=>{ const n=mesmoLote(l).length; return n>1?`<button class="btn-link edit" data-edresplote="${esc(l.id)}" type="button" style="margin-top:6px" title="Usa o nome digitado em Responsável para todas as frotas desta frente informadas no mesmo horário">Trocar só o responsável nas ${n} frotas deste horário</button>`:''; })()}<div class="msg err" data-edmsg="${esc(l.id)}"></div></td><td><input type="datetime-local" class="w-hora ed-quando" value="${loc}" aria-label="Horário informado"></td><td class="num hint">${lanc(l)}</td><td>${l.f?esc(l.f.nome):'–'}</td><td><b>${esc(l.v.codigo)}</b></td><td>${esc(l.v.tipo)}</td>
         <td class="r"><input class="ed-pct" value="${temPct(l)?Math.round(l.pct):''}" placeholder="não enviada" inputmode="numeric" aria-label="% combustível"></td><td></td>
         <td class="r"><input class="ed-hor" value="${l.horimetro!=null?l.horimetro:''}" inputmode="decimal" placeholder="${l.v.tipo==='Colhedora'?'obrigatório':'opcional'}" aria-label="Horímetro"></td><td></td>
         <td><input class="w-resp ed-resp" value="${esc(l.responsavel||'')}" aria-label="Responsável"><input class="w-resp ed-motivo" placeholder="motivo (opcional)" style="margin-top:4px" aria-label="Motivo da correção"></td></tr>`; };
@@ -1542,6 +1554,10 @@ img{max-width:100%}
     else if(d.edsalvar){ const tr=document.querySelector(`tr[data-ed="${d.edsalvar}"]`), m=tr.querySelector('[data-edmsg]'); t.disabled=true;
       try{ await editarLanc(d.edsalvar,{pct:tr.querySelector('.ed-pct').value,horimetro:tr.querySelector('.ed-hor').value,quando:tr.querySelector('.ed-quando').value,responsavel:tr.querySelector('.ed-resp').value},tr.querySelector('.ed-motivo').value);
         S.editando=null; render(); }
+      catch(err){ m.textContent=erroTxt(err); t.disabled=false; } }
+    else if(d.edresplote){ const tr=document.querySelector(`tr[data-ed="${d.edresplote}"]`), m=tr.querySelector('[data-edmsg]'); t.disabled=true;
+      try{ const n=await trocarRespLote(d.edresplote,tr.querySelector('.ed-resp').value,tr.querySelector('.ed-motivo').value); S.editando=null; render();
+        const mp=$('#msg-xlsx'); if(mp){ mp.className='msg ok'; mp.textContent=n?`Responsável trocado em ${n} lançamento(s).`:'Todas já estavam com esse responsável.'; } }
       catch(err){ m.textContent=erroTxt(err); t.disabled=false; } }
     else if(d.anular){ const mo=($('#anul-motivo')||{}).value||''; S.confirm=null; try{ await anularLanc(d.anular,true,mo); }catch(err){ falhou(err); } render(); }
     else if(d.reativar){ try{ await anularLanc(d.reativar,false,''); }catch(err){ falhou(err); } render(); }
