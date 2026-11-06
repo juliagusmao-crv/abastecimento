@@ -1174,7 +1174,7 @@ img{max-width:100%}
     Object.entries(fazPorFrente).forEach(([fid,arr])=>{ const faz=maisComum(arr), f=(S.frentes||[]).find(x=>x.id===fid); if(f&&faz&&String(f.fazenda||'').trim()!==faz) acoes.push({k:'fazenda',chave:'z:'+fid,fid,faz,txt:`<b>${esc(f.nome)}</b>`,de:'Fazenda '+(f.fazenda||'não informada'),paraTxt:'Fazenda '+faz}); });
     return {acoes,iguais,avisos};
   }
-  const REL_ROT={manut:'Vai para manutenção (oficina externa)',mover:'Mudou de frente',sairBase:'Voltou da base',reativar:'Volta a ser ativa',nova:'Frota nova (cadastrar)',base:'Vai para a base',fazenda:'Fazenda da frente'};
+  const REL_ROT={manut:'Vai para manutenção (oficina externa)',mover:'Mudou de frente',sairBase:'Voltou da base / manutenção',reativar:'Volta a ser ativa',nova:'Frota nova (cadastrar)',base:'Vai para a base / manutenção',fazenda:'Fazenda da frente'};
   function relRender(){
     const box=$('#rel-prev'); if(!REL.relatorios.length){ box.hidden=true; box.innerHTML=''; return; }
     const frentesOpt=[...(S.frentes||[])].sort(byNome);
@@ -1183,7 +1183,7 @@ img{max-width:100%}
     const faltaMapa=REL.secoes.filter(s=>!REL.mapa[s.cod]);
     const mapaHtml=`<div class="table-wrap boxed"><table><thead><tr><th>No relatório</th><th>Frotas</th><th>Frente no site</th></tr></thead><tbody>${REL.secoes.map(s=>`<tr><td><b>${esc(s.cod)}</b> ${esc(s.nomes.join(' / '))}</td><td>${s.todas.length}</td>
       <td><select data-relmapa="${esc(s.cod)}"><option value="">— escolha —</option>${frentesOpt.map(f=>`<option value="${esc(f.id)}"${REL.mapa[s.cod]===f.id?' selected':''}>${esc(f.nome)}${f.fazenda?' · Faz. '+esc(f.fazenda):''}</option>`).join('')}<option value="__base"${REL.mapa[s.cod]==='__base'?' selected':''}>Base (usina)</option><option value="__ign"${REL.mapa[s.cod]==='__ign'?' selected':''}>Ignorar esta seção</option></select></td></tr>`).join('')}</tbody></table></div>`;
-    const grupos=['mover','sairBase','reativar','nova','base','manut','fazenda'].map(k=>({k,it:r.acoes.filter(a=>a.k===k)})).filter(g=>g.it.length);
+    const grupos=['mover','sairBase','reativar','nova','base','fazenda'].map(k=>({k,it:r.acoes.filter(a=>a.k===k||(k==='base'&&a.k==='manut'))})).filter(g=>g.it.length);
     const marcadas=r.acoes.filter(a=>!REL.desmarcados.has(a.chave)).length;
     const lista=grupos.map(g=>`<h3>${REL_ROT[g.k]} (${g.it.length})</h3><div class="table-wrap boxed"><table class="rel-acoes"><thead><tr><th></th><th>${g.k==='fazenda'?'Frente':'Frota'}</th><th>Hoje no site</th><th>Vai ficar</th></tr></thead><tbody>${g.it.map(a=>`<tr><td><input type="checkbox" data-relchk="${esc(a.chave)}"${REL.desmarcados.has(a.chave)?'':' checked'} aria-label="Aplicar"></td><td>${a.txt}${a.sumiu?' <span class="chip nenv">não veio no relatório</span>':''}</td><td>${esc(a.de)}</td><td><b>${esc(a.paraTxt)}</b></td></tr>`).join('')}</tbody></table></div>`).join('');
     box.hidden=false;
