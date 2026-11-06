@@ -1127,6 +1127,8 @@ img{max-width:100%}
     return {tipo, data:dm?dm[1]+' '+dm[2]:'', secoes, arquivo:nomeArq||''};
   }
   const REL={relatorios:[],mapa:{},desmarcados:new Set(),secoes:[]};
+  // Código 9998 no relatório = frota na base (usina), em qualquer seção.
+  const COD_BASE=['9998'];
   const maisComum = arr => { const c={}; arr.filter(Boolean).forEach(x=>c[x]=(c[x]||0)+1); return Object.keys(c).sort((a,b)=>c[b]-c[a])[0]||''; };
   function mapaPadrao(sec){
     const fr=S.frentesTodas||[], ativas=S.frentes||[];
@@ -1149,14 +1151,14 @@ img{max-width:100%}
     const porCod={}, rep=[];
     REL.secoes.forEach(sec=>sec.todas.forEach(fr=>{ if(porCod[fr.codigo]&&porCod[fr.codigo].sec!==sec.cod) rep.push(fr.codigo); porCod[fr.codigo]={...fr,sec:sec.cod}; }));
     if(rep.length) avisos.push(`Frota(s) em mais de uma frente no relatório: ${[...new Set(rep)].join(', ')}. Foi usada a última que aparece.`);
-    Object.values(porCod).forEach(fr=>{ const dest=REL.mapa[fr.sec];
+    Object.values(porCod).forEach(fr=>{ const naBaseRel=COD_BASE.includes(fr.codFaz), dest=naBaseRel&&REL.mapa[fr.sec]!=='__ign'?'__base':REL.mapa[fr.sec];
       const v=todas.find(x=>String(x.codigo)===fr.codigo&&!x.retirada)||todas.find(x=>String(x.codigo)===fr.codigo);
       if(v) vistos.add(v.id);
       if(!dest||dest==='__ign') return;
       if(!v){ if(dest!=='__base') acoes.push({k:'nova',chave:'n:'+fr.codigo,codigo:fr.codigo,tipo:fr.tipo||'Trator',modelo:fr.modelo,para:dest,txt:`<b>${esc(fr.codigo)}</b> · ${esc(fr.tipo||'Trator')} ${esc(fr.modelo)}`,de:'não cadastrada',paraTxt:fN(dest)}); return; }
       if(fr.tipo&&v.tipo!==fr.tipo) avisos.push(`${v.codigo} está cadastrada como ${v.tipo}, mas veio no relatório de ${fr.tipo==='Colhedora'?'colhedoras':'transbordos'}.`);
-      const base={chave:'v:'+v.id,v,txt:`<b>${esc(v.codigo)}</b> · ${esc(v.tipo)} ${esc(v.modelo||'')}`,de:ondeEsta(v),paraTxt:fN(dest),para:dest};
-      if(v.retirada){ if(dest!=='__base') acoes.push({...base,k:'reativar'}); return; }
+      const base={chave:'v:'+v.id,v,txt:`<b>${esc(v.codigo)}</b> · ${esc(v.tipo)} ${esc(v.modelo||'')}`+(naBaseRel?' <span class="chip nenv">código 9998 no relatório</span>':''),de:ondeEsta(v),paraTxt:fN(dest),para:dest};
+      if(v.retirada){ acoes.push({...base,k:'reativar'}); return; }
       if(dest==='__base'){ if(naBaseFrota(v)) iguais.push(base); else acoes.push({...base,k:'base'}); return; }
       if(naBaseFrota(v)){ acoes.push({...base,k:'sairBase'}); return; }
       if(v.frenteId!==dest) acoes.push({...base,k:'mover'}); else iguais.push(base);
@@ -1164,7 +1166,7 @@ img{max-width:100%}
     // estavam numa frente e não vieram no relatório do seu tipo: vão para a base
     (S.frotas||[]).filter(v=>tipos.has(v.tipo)&&!vistos.has(v.id)).forEach(v=>acoes.push({k:'base',sumiu:true,chave:'v:'+v.id,v,txt:`<b>${esc(v.codigo)}</b> · ${esc(v.tipo)} ${esc(v.modelo||'')}`,de:ondeEsta(v),paraTxt:'Base (usina)',para:'__base'}));
     // fazenda: código mais comum das frotas da seção
-    const fazPorFrente={}; REL.secoes.forEach(sec=>{ const dest=REL.mapa[sec.cod]; if(!dest||dest.startsWith('__')) return; (fazPorFrente[dest]=fazPorFrente[dest]||[]).push(...sec.todas.map(x=>x.codFaz)); });
+    const fazPorFrente={}; REL.secoes.forEach(sec=>{ const dest=REL.mapa[sec.cod]; if(!dest||dest.startsWith('__')) return; (fazPorFrente[dest]=fazPorFrente[dest]||[]).push(...sec.todas.map(x=>x.codFaz).filter(c=>!COD_BASE.includes(c))); });
     Object.entries(fazPorFrente).forEach(([fid,arr])=>{ const faz=maisComum(arr), f=(S.frentes||[]).find(x=>x.id===fid); if(f&&faz&&String(f.fazenda||'').trim()!==faz) acoes.push({k:'fazenda',chave:'z:'+fid,fid,faz,txt:`<b>${esc(f.nome)}</b>`,de:'Fazenda '+(f.fazenda||'não informada'),paraTxt:'Fazenda '+faz}); });
     return {acoes,iguais,avisos};
   }
@@ -1196,7 +1198,7 @@ img{max-width:100%}
       else if(a.k==='mover') await moverFrota(a.v.id,a.para);
       else if(a.k==='sairBase') await baseFrota(a.v.id,false,a.para);
       else if(a.k==='base') await baseFrota(a.v.id,true);
-      else if(a.k==='reativar'){ await retirarFrota(a.v.id,false); if(a.v.base||naBaseFrota(a.v)) await baseFrota(a.v.id,false,a.para); else if(a.v.frenteId!==a.para) await moverFrota(a.v.id,a.para); }
+      else if(a.k==='reativar'){ await retirarFrota(a.v.id,false); if(a.para==='__base'){ if(!naBaseFrota(a.v)) await baseFrota(a.v.id,true); } else if(a.v.base||naBaseFrota(a.v)) await baseFrota(a.v.id,false,a.para); else if(a.v.frenteId!==a.para) await moverFrota(a.v.id,a.para); }
       else if(a.k==='fazenda') await alterarFazenda(a.fid,a.faz);
       ok++; }catch(err){ falhas.push(`${a.v?a.v.codigo:a.codigo||a.fid}: ${erroTxt(err)}`); } }
     // guarda qual seção do relatório é cada frente, para as próximas vezes (só a administradora pode)
