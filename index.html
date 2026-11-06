@@ -191,6 +191,10 @@ td .code{font-family:var(--f-display);font-weight:700;font-size:1.15rem}
 .st-info{background:var(--surface-2);color:var(--muted)}
 .chip.edit{background:var(--warn-soft);color:var(--fg)}
 .chip.anul{background:var(--crit-soft);color:var(--crit)}
+#rel-prev h3{font-size:1rem;margin:16px 0 6px}
+#rel-prev .rel-acoes td:first-child{width:28px}
+#rel-prev select{width:auto;padding:4px 6px;font-size:.9rem}
+#rel-prev .rel-foot{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
 tr.anulado td{text-decoration:line-through;text-decoration-color:var(--crit);opacity:.6}
 tr.anulado td.acoes,tr.anulado td.obs{text-decoration:none;opacity:1}
 .obs-edit{font-size:.78rem;color:var(--muted);white-space:normal;line-height:1.3;margin-top:2px;font-family:var(--f-body)}
@@ -385,6 +389,13 @@ img{max-width:100%}
         </form>
       </section>
     </div>
+    <section class="panel" id="painel-rel">
+      <div class="panel-head"><h2>Atualizar frentes pelos relatórios de disponibilidade</h2><span class="hint">PDF de colhedoras e/ou de transbordos</span></div>
+      <p class="hint">Escolha os PDFs (pode escolher os dois de uma vez). O site compara com as frentes cadastradas e mostra o que vai mudar. <b>Nada é alterado antes de você conferir e clicar em Aplicar.</b></p>
+      <div class="lote-foot"><input type="file" id="rel-arq" accept=".pdf,application/pdf" multiple style="width:auto"><button class="btn-primary" id="btn-rel-ler" type="button">Ler relatórios</button></div>
+      <p class="msg" id="msg-rel" role="status"></p>
+      <div id="rel-prev" hidden></div>
+    </section>
     <section class="panel">
       <div class="panel-head"><h2>Frotas cadastradas</h2><span class="hint" id="frotas-count"></span></div>
       <div id="aviso-orfas"></div>
@@ -1076,6 +1087,124 @@ img{max-width:100%}
   }
 
   const IMP={linhas:[],duplicadas:[],texto:''};
+
+  // ---- Atualizar frentes pelos relatórios de disponibilidade (PDF) ----
+  const PDFJS_URL='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+  function carregarPdfJs(){
+    if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    return new Promise((ok,falha)=>{ const sc=document.createElement('script'); sc.src=PDFJS_URL+'pdf.min.js';
+      sc.onload=()=>{ if(!window.pdfjsLib) return falha(new Error('Leitor de PDF não carregou.')); window.pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS_URL+'pdf.worker.min.js'; ok(window.pdfjsLib); };
+      sc.onerror=()=>falha(new Error('Não foi possível carregar o leitor de PDF. Confira a internet e tente de novo.')); document.head.appendChild(sc); });
+  }
+  // Texto do PDF em linhas (itens com a mesma altura na página viram uma linha, da esquerda para a direita)
+  async function pdfEmLinhas(file){
+    const lib=await carregarPdfJs(); const pdf=await lib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise; const linhas=[];
+    for(let p=1;p<=pdf.numPages;p++){ const pg=await pdf.getPage(p), tc=await pg.getTextContent();
+      const its=tc.items.filter(i=>i.str&&i.str.trim()).map(i=>({s:i.str.trim(),x:i.transform[4],y:i.transform[5]})).sort((a,b)=>b.y-a.y||a.x-b.x);
+      const grupos=[]; its.forEach(i=>{ const g=grupos[grupos.length-1]; if(g&&Math.abs(g.y-i.y)<=2.5) g.its.push(i); else grupos.push({y:i.y,its:[i]}); });
+      grupos.forEach(g=>linhas.push(g.its.sort((a,b)=>a.x-b.x).map(i=>i.s).join(' ').replace(/\s+/g,' ').trim())); }
+    return linhas;
+  }
+  const normModelo = m => String(m||'').trim().replace(/^TRATOR\s+(JOHN DEERE\s+)?/i,'').replace(/^(CH)\s+(\d)/i,'$1$2');
+  // Lê o relatório: tipo (pelo título), data e, para cada seção (F-1, F-2...), as frotas com modelo e código da fazenda.
+  function interpretarRelatorio(linhas, nomeArq){
+    const U=linhas.map(l=>semAcento(l).toUpperCase());
+    const tudo=U.slice(0,8).join(' ')+' '+semAcento(nomeArq||'').toUpperCase();
+    const tipo=/COLHEDORA/.test(tudo)?'Colhedora':/TRANSBORDO|TRATOR/.test(tudo)?'Trator':null;
+    const dm=linhas.join(' ').match(/(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})/);
+    const secoes=[]; let sec=null;
+    U.forEach((L,i)=>{ let m;
+      const nF=(L.match(/\bF\s*-\s*\d+\b/g)||[]).length;
+      if(/^F\s*-\s*\d+\b/.test(L)&&nF===1&&!/MEDIA|PERIODO|JANELA/.test(L)){
+        m=L.match(/^F\s*-\s*(\d+)\b/); const cod='F-'+Number(m[1]);
+        const nome=linhas[i].replace(/^F\s*-\s*\d+/i,'').replace(/\(continua[çc][ãa]o\)/i,'').replace(/\d+\s+frotas?\s*$/i,'').trim();
+        sec=secoes.find(x=>x.cod===cod); if(!sec){ sec={cod,nome,frotas:[]}; secoes.push(sec); } return; }
+      if(/^(?!TOTAL|FROTA\b)([A-Z][A-Z .\/]+?)\s+\d+\s+FROTAS?$/.test(L)){ // seção sem "F-" (ex.: BASE, OFICINA)
+        const cod=L.replace(/\s+\d+\s+FROTAS?$/,'').trim(); sec=secoes.find(x=>x.cod===cod); if(!sec){ sec={cod,nome:'',frotas:[]}; secoes.push(sec); } return; }
+      if(sec&&(m=L.match(/^(\d{4,6})\s+(.+?)\s+(\S+)\s+(?:(?:OK|X|P|-|\u2013)\s+){4}(?:OK|X|P|-|\u2013)(?:\s|$)/)))
+        sec.frotas.push({codigo:m[1],modelo:normModelo(m[2]),codFaz:/^\d{3,5}$/.test(m[3])?m[3]:''});
+    });
+    return {tipo, data:dm?dm[1]+' '+dm[2]:'', secoes, arquivo:nomeArq||''};
+  }
+  const REL={relatorios:[],mapa:{},desmarcados:new Set(),secoes:[]};
+  const maisComum = arr => { const c={}; arr.filter(Boolean).forEach(x=>c[x]=(c[x]||0)+1); return Object.keys(c).sort((a,b)=>c[b]-c[a])[0]||''; };
+  function mapaPadrao(sec){
+    const fr=S.frentesTodas||[], ativas=S.frentes||[];
+    const salvo=fr.find(f=>f.codRelatorio===sec.cod); if(salvo) return ehFrenteBase(salvo)?'__base':salvo.id;
+    if(/^(BASE|USINA)/.test(sec.cod)) return '__base';
+    const m=sec.cod.match(/^F-(\d+)$/);
+    if(m){ const porNome=ativas.filter(f=>{ const n=semAcentoTxt(f.nome).toUpperCase().replace(/\s+/g,' ').trim(); return n==='FRENTE '+m[1]||n==='FRENTE 0'+m[1]||new RegExp('^F\\s*-?\\s*0?'+m[1]+'\\b').test(n); });
+      if(porNome.length===1) return porNome[0].id; }
+    const faz=maisComum(sec.todas.map(x=>x.codFaz)); if(faz){ const pf=ativas.filter(f=>String(f.fazenda||'').trim()===faz); if(pf.length===1) return pf[0].id; }
+    return '';
+  }
+  function relSecoes(){ // junta as seções de todos os relatórios pelo código (F-6 de colhedoras + F-6 de transbordos)
+    const m={}; REL.relatorios.forEach(r=>r.secoes.forEach(s=>{ const x=m[s.cod]||(m[s.cod]={cod:s.cod,nomes:[],todas:[]}); if(s.nome&&!x.nomes.includes(s.nome)) x.nomes.push(s.nome); s.frotas.forEach(f=>x.todas.push({...f,tipo:r.tipo})); }));
+    return Object.values(m).sort((a,b)=>a.cod.localeCompare(b.cod,'pt-BR',{numeric:true}));
+  }
+  function relCalcular(){
+    const acoes=[], iguais=[], avisos=[], vistos=new Set(), tipos=new Set(REL.relatorios.map(r=>r.tipo).filter(Boolean));
+    const todas=S.frotasTodas||[], fN=id=>id==='__base'?'Base (usina)':((S.frentesTodas||[]).find(f=>f.id===id)||{}).nome||'–';
+    const ondeEsta=v=>v.retirada?'Retirada':naBaseFrota(v)?'Base (usina)':fN(v.frenteId);
+    const porCod={}, rep=[];
+    REL.secoes.forEach(sec=>sec.todas.forEach(fr=>{ if(porCod[fr.codigo]&&porCod[fr.codigo].sec!==sec.cod) rep.push(fr.codigo); porCod[fr.codigo]={...fr,sec:sec.cod}; }));
+    if(rep.length) avisos.push(`Frota(s) em mais de uma frente no relatório: ${[...new Set(rep)].join(', ')}. Foi usada a última que aparece.`);
+    Object.values(porCod).forEach(fr=>{ const dest=REL.mapa[fr.sec];
+      const v=todas.find(x=>String(x.codigo)===fr.codigo&&!x.retirada)||todas.find(x=>String(x.codigo)===fr.codigo);
+      if(v) vistos.add(v.id);
+      if(!dest||dest==='__ign') return;
+      if(!v){ if(dest!=='__base') acoes.push({k:'nova',chave:'n:'+fr.codigo,codigo:fr.codigo,tipo:fr.tipo||'Trator',modelo:fr.modelo,para:dest,txt:`<b>${esc(fr.codigo)}</b> · ${esc(fr.tipo||'Trator')} ${esc(fr.modelo)}`,de:'não cadastrada',paraTxt:fN(dest)}); return; }
+      if(fr.tipo&&v.tipo!==fr.tipo) avisos.push(`${v.codigo} está cadastrada como ${v.tipo}, mas veio no relatório de ${fr.tipo==='Colhedora'?'colhedoras':'transbordos'}.`);
+      const base={chave:'v:'+v.id,v,txt:`<b>${esc(v.codigo)}</b> · ${esc(v.tipo)} ${esc(v.modelo||'')}`,de:ondeEsta(v),paraTxt:fN(dest),para:dest};
+      if(v.retirada){ if(dest!=='__base') acoes.push({...base,k:'reativar'}); return; }
+      if(dest==='__base'){ if(naBaseFrota(v)) iguais.push(base); else acoes.push({...base,k:'base'}); return; }
+      if(naBaseFrota(v)){ acoes.push({...base,k:'sairBase'}); return; }
+      if(v.frenteId!==dest) acoes.push({...base,k:'mover'}); else iguais.push(base);
+    });
+    // estavam numa frente e não vieram no relatório do seu tipo: vão para a base
+    (S.frotas||[]).filter(v=>tipos.has(v.tipo)&&!vistos.has(v.id)).forEach(v=>acoes.push({k:'base',sumiu:true,chave:'v:'+v.id,v,txt:`<b>${esc(v.codigo)}</b> · ${esc(v.tipo)} ${esc(v.modelo||'')}`,de:ondeEsta(v),paraTxt:'Base (usina)',para:'__base'}));
+    // fazenda: código mais comum das frotas da seção
+    const fazPorFrente={}; REL.secoes.forEach(sec=>{ const dest=REL.mapa[sec.cod]; if(!dest||dest.startsWith('__')) return; (fazPorFrente[dest]=fazPorFrente[dest]||[]).push(...sec.todas.map(x=>x.codFaz)); });
+    Object.entries(fazPorFrente).forEach(([fid,arr])=>{ const faz=maisComum(arr), f=(S.frentes||[]).find(x=>x.id===fid); if(f&&faz&&String(f.fazenda||'').trim()!==faz) acoes.push({k:'fazenda',chave:'z:'+fid,fid,faz,txt:`<b>${esc(f.nome)}</b>`,de:'Fazenda '+(f.fazenda||'não informada'),paraTxt:'Fazenda '+faz}); });
+    return {acoes,iguais,avisos};
+  }
+  const REL_ROT={mover:'Mudou de frente',sairBase:'Voltou da base',reativar:'Volta a ser ativa',nova:'Frota nova (cadastrar)',base:'Vai para a base',fazenda:'Fazenda da frente'};
+  function relRender(){
+    const box=$('#rel-prev'); if(!REL.relatorios.length){ box.hidden=true; box.innerHTML=''; return; }
+    const frentesOpt=[...(S.frentes||[])].sort(byNome);
+    const r=relCalcular(); REL.ultimo=r;
+    const cab=REL.relatorios.map(x=>`<li><b>${x.tipo==='Colhedora'?'Colhedoras':x.tipo==='Trator'?'Transbordos':'Tipo não identificado'}</b>${x.data?' · '+esc(x.data):''} · ${x.secoes.reduce((a,s)=>a+s.frotas.length,0)} frotas em ${x.secoes.length} seções <span class="hint" style="display:inline">(${esc(x.arquivo)})</span></li>`).join('');
+    const faltaMapa=REL.secoes.filter(s=>!REL.mapa[s.cod]);
+    const mapaHtml=`<div class="table-wrap boxed"><table><thead><tr><th>No relatório</th><th>Frotas</th><th>Frente no site</th></tr></thead><tbody>${REL.secoes.map(s=>`<tr><td><b>${esc(s.cod)}</b> ${esc(s.nomes.join(' / '))}</td><td>${s.todas.length}</td>
+      <td><select data-relmapa="${esc(s.cod)}"><option value="">— escolha —</option>${frentesOpt.map(f=>`<option value="${esc(f.id)}"${REL.mapa[s.cod]===f.id?' selected':''}>${esc(f.nome)}${f.fazenda?' · Faz. '+esc(f.fazenda):''}</option>`).join('')}<option value="__base"${REL.mapa[s.cod]==='__base'?' selected':''}>Base (usina)</option><option value="__ign"${REL.mapa[s.cod]==='__ign'?' selected':''}>Ignorar esta seção</option></select></td></tr>`).join('')}</tbody></table></div>`;
+    const grupos=['mover','sairBase','reativar','nova','base','fazenda'].map(k=>({k,it:r.acoes.filter(a=>a.k===k)})).filter(g=>g.it.length);
+    const marcadas=r.acoes.filter(a=>!REL.desmarcados.has(a.chave)).length;
+    const lista=grupos.map(g=>`<h3>${REL_ROT[g.k]} (${g.it.length})</h3><div class="table-wrap boxed"><table class="rel-acoes"><thead><tr><th></th><th>${g.k==='fazenda'?'Frente':'Frota'}</th><th>Hoje no site</th><th>Vai ficar</th></tr></thead><tbody>${g.it.map(a=>`<tr><td><input type="checkbox" data-relchk="${esc(a.chave)}"${REL.desmarcados.has(a.chave)?'':' checked'} aria-label="Aplicar"></td><td>${a.txt}${a.sumiu?' <span class="chip nenv">não veio no relatório</span>':''}</td><td>${esc(a.de)}</td><td><b>${esc(a.paraTxt)}</b></td></tr>`).join('')}</tbody></table></div>`).join('');
+    box.hidden=false;
+    box.innerHTML=`<ul class="hint" style="margin:6px 0 10px 18px">${cab}</ul>
+      <h3>1. Confira de qual frente é cada seção</h3>${mapaHtml}
+      ${faltaMapa.length?`<p class="msg err">Escolha a frente de: ${faltaMapa.map(s=>esc(s.cod)).join(', ')}. Enquanto não escolher, essas frotas não entram na conferência.</p>`:''}
+      ${r.avisos.map(x=>`<p class="msg err">${esc(x)}</p>`).join('')}
+      <h3>2. Confira as mudanças</h3>${r.acoes.length?`<p class="hint">Desmarque o que não estiver certo.</p>${lista}`:'<p class="msg ok">Tudo igual ao site: nenhuma mudança.</p>'}
+      ${r.iguais.length?`<details style="margin-top:10px"><summary class="hint" style="cursor:pointer">Sem mudança (${r.iguais.length})</summary><p class="hint">${r.iguais.map(a=>`${esc(a.v.codigo)} (${esc(a.de)})`).join(' · ')}</p></details>`:''}
+      <div class="rel-foot">${r.acoes.length?`<button class="btn-primary" id="btn-rel-aplicar" type="button"${marcadas?'':' disabled'}>Aplicar ${marcadas} alteração(ões)</button>`:''}<button class="btn-ghost" id="btn-rel-cancelar" type="button">Cancelar</button><span class="msg" id="msg-rel-apl" role="status"></span></div>`;
+  }
+  async function relAplicar(){
+    const r=relCalcular(), sel=r.acoes.filter(a=>!REL.desmarcados.has(a.chave)); let ok=0; const falhas=[];
+    for(const a of sel){ try{
+      if(a.k==='nova') await salvarFrota({codigo:a.codigo,tipo:a.tipo,modelo:a.modelo,frenteId:a.para});
+      else if(a.k==='mover') await moverFrota(a.v.id,a.para);
+      else if(a.k==='sairBase') await baseFrota(a.v.id,false,a.para);
+      else if(a.k==='base') await baseFrota(a.v.id,true);
+      else if(a.k==='reativar'){ await retirarFrota(a.v.id,false); if(a.v.base||naBaseFrota(a.v)) await baseFrota(a.v.id,false,a.para); else if(a.v.frenteId!==a.para) await moverFrota(a.v.id,a.para); }
+      else if(a.k==='fazenda') await alterarFazenda(a.fid,a.faz);
+      ok++; }catch(err){ falhas.push(`${a.v?a.v.codigo:a.codigo||a.fid}: ${erroTxt(err)}`); } }
+    // guarda qual seção do relatório é cada frente, para as próximas vezes (só a administradora pode)
+    if(ehAdmin()){ for(const sec of REL.secoes){ const dest=REL.mapa[sec.cod]; if(!dest||dest.startsWith('__')) continue;
+      try{ for(const f of (S.frentesTodas||[]).filter(f=>f.codRelatorio===sec.cod&&f.id!==dest)) await db.collection('frentes').doc(f.id).update({codRelatorio:''});
+        const f=(S.frentesTodas||[]).find(x=>x.id===dest); if(f&&f.codRelatorio!==sec.cod) await db.collection('frentes').doc(dest).update({codRelatorio:sec.cod}); }catch(e){} } }
+    return {ok,falhas};
+  }
   const frotasPorCodigo = () => { const m={}; S.frotas.forEach(v=>m[String(v.codigo)]=v); return m; };
   function impQuando(){ const d=$('#imp-data').value, h=$('#imp-hora').value; return (d&&h)?new Date(d+'T'+h).toISOString():null; }
   function impPills(st){ return st.length ? st.map(x=>`<span class="st-pill st-${x.nivel}">${x.nivel==='erro'?'Erro':x.nivel==='info'?(/não enviada/.test(x.msg)?'Não enviada':'Ajustado'):'Alerta'}: ${esc(x.msg)}</span>`).join('') : '<span class="st-pill st-ok">OK</span>'; }
@@ -1528,6 +1657,8 @@ img{max-width:100%}
   document.addEventListener('change', async e=>{
     const t=e.target, d=t.dataset||{};
     if(d.mover){ try{ await moverFrota(d.mover,t.value); }catch(err){ falhou(err); } }
+    if(d.relmapa!==undefined){ REL.mapa[d.relmapa]=t.value; relRender(); }
+    if(d.relchk!==undefined){ if(t.checked) REL.desmarcados.delete(d.relchk); else REL.desmarcados.add(d.relchk); relRender(); }
     if(d.funcao){ try{ await mudar('salvarUsuario',{id:d.funcao,funcao:t.value}); }catch(err){ falhou(err); } }
   });
 
@@ -1594,6 +1725,20 @@ img{max-width:100%}
     else if(d.renomear){ const x=S.usuarios.find(u=>u.id===d.renomear); const n=x&&window.prompt('Nome de '+(x.email||'usuário')+':',x.nome||''); if(n&&n.trim()){ try{ await mudar('salvarUsuario',{id:x.id,nome:n.trim()}); render(); }catch(err){ falhou(err); } } }
     else if(t.id==='btn-esqueci'){ const m=$('#msg-g'), em=$('#g-email').value.trim(); if(!em){ m.className='msg err'; m.textContent='Digite seu e-mail no campo acima e clique de novo em "Esqueci minha senha".'; return; }
       try{ await auth.sendPasswordResetEmail(em); m.className='msg'; m.textContent='Se esse e-mail estiver cadastrado, você vai receber um link para criar uma senha nova. Confira também o spam.'; }catch(err){ m.className='msg err'; m.textContent=erroTxt(err); } }
+    else if(t.id==='btn-rel-ler'){ const m=$('#msg-rel'), fs=[...($('#rel-arq').files||[])]; m.className='msg';
+      if(!fs.length){ m.className='msg err'; m.textContent='Escolha o PDF de colhedoras e/ou o de transbordos.'; return; }
+      t.disabled=true; m.textContent='Lendo…';
+      try{ const rels=[]; for(const f of fs){ const r=interpretarRelatorio(await pdfEmLinhas(f),f.name);
+          if(!r.secoes.some(s=>s.frotas.length)) throw new Error(`Não encontrei frotas em ${f.name}. É o relatório de disponibilidade?`);
+          if(!r.tipo) throw new Error(`Não identifiquei se ${f.name} é de colhedoras ou de transbordos.`); rels.push(r); }
+        if(new Set(rels.map(r=>r.tipo)).size<rels.length) throw new Error('Escolha no máximo um PDF de colhedoras e um de transbordos.');
+        REL.relatorios=rels; REL.desmarcados=new Set(); REL.secoes=relSecoes(); REL.mapa={}; REL.secoes.forEach(s=>REL.mapa[s.cod]=mapaPadrao(s));
+        m.textContent=''; relRender(); $('#rel-prev').scrollIntoView({behavior:'smooth',block:'start'}); }
+      catch(err){ m.className='msg err'; m.textContent=erroTxt(err); } t.disabled=false; }
+    else if(t.id==='btn-rel-cancelar'){ REL.relatorios=[]; $('#rel-arq').value=''; relRender(); }
+    else if(t.id==='btn-rel-aplicar'){ t.disabled=true; const m=$('#msg-rel-apl'); m.className='msg'; m.textContent='Aplicando…';
+      const r=await relAplicar(); REL.relatorios=[]; $('#rel-arq').value=''; relRender(); render();
+      const mm=$('#msg-rel'); mm.className=r.falhas.length?'msg err':'msg ok'; mm.textContent=`${r.ok} alteração(ões) aplicada(s).`+(r.falhas.length?` Não deu certo: ${r.falhas.join(' · ')}`:' Tudo ficou registrado no Registro de alterações.'); }
     else if(t.id==='btn-importar'){ const m=$('#msg-imp'), f=$('#imp-arq').files[0]; m.className='msg';
       if(!f){ m.className='msg err'; m.textContent='Escolha o arquivo dados-iniciais.json.'; return; }
       t.disabled=true; m.textContent='Importando…';
