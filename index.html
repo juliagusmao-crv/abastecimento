@@ -1609,7 +1609,6 @@ img{max-width:100%}
   function modeloMensagem(f){
     const fr=(S.frotas||[]).filter(v=>v.frenteId===f.id).sort(byCode), col=fr.filter(v=>v.tipo==='Colhedora'), tra=fr.filter(v=>v.tipo!=='Colhedora');
     const L=[`*⛽ ABASTECIMENTO · ${f.nome.toUpperCase()}*`];
-    if(f.fazenda) L.push(`Fazenda: ${f.fazenda}`);
     L.push('Data e hora: ','Responsável: ','');
     if(col.length){ L.push('*COLHEDORAS* (% e horímetro)'); col.forEach(v=>L.push(`${v.codigo} - % - HOR: `)); L.push(''); }
     if(tra.length){ L.push('*TRANSBORDOS* (só %)'); tra.forEach(v=>L.push(`${v.codigo} - %`)); L.push(''); }
