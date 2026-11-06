@@ -284,10 +284,15 @@ img{max-width:100%}
       <label for="r-ate" class="per">Até<input type="date" id="r-ate"></label>
     </div>
     <div style="display:grid;gap:4px;justify-items:end">
-      <button class="btn-primary" id="btn-pdf" type="button">Exportar PDF</button>
+      <span style="display:flex;gap:8px;flex-wrap:wrap;justify-content:end"><button class="btn-ghost" id="btn-modelo" type="button" title="Mensagem para os líderes preencherem no WhatsApp">Modelo para os líderes</button><button class="btn-primary" id="btn-pdf" type="button">Exportar PDF</button></span>
       <p class="msg" id="msg-pdf" role="status"></p>
     </div>
   </div>
+  <section class="panel" id="modelo-box" hidden>
+    <div class="panel-head"><h2>Modelo de mensagem para os líderes</h2><button class="btn-ghost btn-sm" id="btn-modelo-fechar" type="button">Fechar</button></div>
+    <p class="hint">Já vem com as frotas que estão em cada frente agora (sem as da base e da manutenção). Copie e mande no grupo; o líder preenche e a resposta pode ser colada direto em <b>Lançar › Importar mensagem</b>.</p>
+    <div id="modelo-lista"></div>
+  </section>
 
   <!-- VISÃO GERAL -->
   <div class="tab" id="tab-geral" hidden>
@@ -777,6 +782,7 @@ img{max-width:100%}
     ['geral','lancar','consumo','historico','frotas','usuarios'].forEach(id=>$('#tab-'+id).hidden = !logado || id!==atual);
     $('#toolbar').hidden = !logado || !(atual==='geral'||atual==='consumo'||atual==='historico'||atual==='lancar');
     $('#btn-pdf').hidden = atual==='lancar'||atual==='historico';
+    $('#btn-modelo').hidden = !(atual==='geral'||atual==='lancar'); if($('#btn-modelo').hidden) $('#modelo-box').hidden=true;
     document.querySelectorAll('.per').forEach(el=>el.hidden = atual!=='consumo'&&atual!=='historico');
     $('#btn-pdf').textContent = atual==='consumo' ? 'Exportar consumo (PDF)' : 'Exportar PDF';
     $('#notice-ex').hidden=true;
@@ -1599,6 +1605,27 @@ img{max-width:100%}
   $('#l-frota').addEventListener('change',()=>hintL());
   ['#r-frente','#r-de','#r-ate'].forEach(s=>$(s).addEventListener('change',render));
   $('#btn-xlsx').addEventListener('click',exportarExcel);
+  // Modelo de mensagem para os líderes: uma por frente, com as frotas ativas
+  function modeloMensagem(f){
+    const fr=(S.frotas||[]).filter(v=>v.frenteId===f.id).sort(byCode), col=fr.filter(v=>v.tipo==='Colhedora'), tra=fr.filter(v=>v.tipo!=='Colhedora');
+    const L=[`*⛽ ABASTECIMENTO · ${f.nome.toUpperCase()}*`];
+    if(f.fazenda) L.push(`Fazenda: ${f.fazenda}`);
+    L.push('Data e hora: ','Responsável: ','');
+    if(col.length){ L.push('*COLHEDORAS* (% e horímetro)'); col.forEach(v=>L.push(`${v.codigo} - % - HOR: `)); L.push(''); }
+    if(tra.length){ L.push('*TRANSBORDOS* (só %)'); tra.forEach(v=>L.push(`${v.codigo} - %`)); L.push(''); }
+    L.push('_Preencha o número antes do %. No horímetro, use vírgula só antes da casa decimal. Se não tiver a informação, deixe em branco._');
+    return L.join('\n');
+  }
+  function renderModelos(){
+    const fid=$('#r-frente').value, lista=[...(S.frentes||[])].filter(f=>!fid||f.id===fid).filter(f=>(S.frotas||[]).some(v=>v.frenteId===f.id)).sort(byNome);
+    $('#modelo-lista').innerHTML=lista.length?lista.map(f=>{ const t=modeloMensagem(f); return `<div style="margin-top:12px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b>${esc(f.nome)}</b><span style="display:flex;gap:8px"><button class="btn-ghost btn-sm" data-copiamodelo="${esc(f.id)}" type="button">Copiar</button><a class="btn-primary btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(t)}">Abrir no WhatsApp</a></span></div>
+      <textarea readonly rows="${t.split("\n").length+1}" id="modelo-${esc(f.id)}" style="width:100%;margin-top:6px;font-family:ui-monospace,monospace;font-size:.86rem">${esc(t)}</textarea></div>`; }).join(''):'<p class="hint">Nenhuma frente com frotas ativas.</p>';
+  }
+  $('#btn-modelo').addEventListener('click',()=>{ const b=$('#modelo-box'); b.hidden=!b.hidden; if(!b.hidden){ renderModelos(); b.scrollIntoView({behavior:'smooth',block:'start'}); } });
+  $('#btn-modelo-fechar').addEventListener('click',()=>{ $('#modelo-box').hidden=true; });
+  $('#r-frente').addEventListener('change',()=>{ if(!$('#modelo-box').hidden) renderModelos(); });
+  $('#modelo-lista').addEventListener('click',async e=>{ const b=e.target.closest('[data-copiamodelo]'); if(!b) return; const ta=document.getElementById('modelo-'+b.dataset.copiamodelo);
+    try{ await navigator.clipboard.writeText(ta.value); }catch(_){ ta.select(); document.execCommand('copy'); } const o=b.textContent; b.textContent='Copiado ✓'; setTimeout(()=>b.textContent=o,1800); });
   $('#btn-pdf').addEventListener('click',()=> abaAtual()==='consumo' ? exportarRelatorio() : exportarResumo());
 
   $('#form-l').addEventListener('submit', async e=>{
