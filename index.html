@@ -403,7 +403,7 @@ img{max-width:100%}
       <div id="list-v-ret"></div>
     </section>
     <section class="panel">
-      <div class="panel-head"><h2>Na base (usina)</h2><span class="hint" id="base-count"></span></div>
+      <div class="panel-head"><h2>Na base (usina) e em manutenção</h2><span class="hint" id="base-count"></span></div>
       <p class="hint">Frotas que foram para a base ficam guardadas aqui, com todo o histórico, e não aparecem na Visão geral, nos lançamentos, nos relatórios nem nos PDFs.</p>
       <div id="list-v-base"></div>
     </section>
@@ -616,17 +616,18 @@ img{max-width:100%}
       antes:`${v.tipo} ${v.codigo}${v.modelo?' · '+v.modelo:''} · ${fN(v.frenteId)}`, depois:`${tipo} ${codigo}${modelo?' · '+modelo:''} · ${fN(frenteId)}`,...autor(),em:agora});
     await b.commit();
   }
-  async function baseFrota(id, irParaBase, frenteId){
+  // manut=true: oficina externa (Maqnelson). Fica fora de tudo, como a base, mas aparece como "Manutenção".
+  async function baseFrota(id, irParaBase, frenteId, manut){
     const v=(S.frotasTodas||[]).find(x=>x.id===id); if(!v) return;
     const fN=fid=>(S.frentes.find(x=>x.id===fid)||{}).nome||'';
     const agora=new Date().toISOString(), b=db.batch();
     if(irParaBase){
-      b.update(db.collection('frotas').doc(id),{base:true,baseEm:agora,basePor:S.sessao.nome,alteradaPor:S.sessao.nome,alteradaEm:agora});
-      b.set(db.collection('alteracoes').doc(),{tipo:'frota_base',frotaId:id,frente:fN(v.frenteId),antes:`${v.tipo} ${v.codigo} · ${fN(v.frenteId)}`,depois:'Base (usina)',...autor(),em:agora});
+      b.update(db.collection('frotas').doc(id),{base:true,manutencao:!!manut,baseEm:agora,basePor:S.sessao.nome,alteradaPor:S.sessao.nome,alteradaEm:agora});
+      b.set(db.collection('alteracoes').doc(),{tipo:manut?'frota_manutencao':'frota_base',frotaId:id,frente:fN(v.frenteId),antes:`${v.tipo} ${v.codigo} · ${v.base?(v.manutencao?'Manutenção':'Base (usina)'):fN(v.frenteId)}`,depois:manut?'Manutenção (oficina externa)':'Base (usina)',...autor(),em:agora});
     } else {
       const fid=frenteId||v.frenteId; if(!S.frentes.some(x=>x.id===fid)) throw new Error('Escolha uma frente de trabalho para onde a frota vai.');
-      b.update(db.collection('frotas').doc(id),{base:false,frenteId:fid,alteradaPor:S.sessao.nome,alteradaEm:agora});
-      b.set(db.collection('alteracoes').doc(),{tipo:'frota_saiu_base',frotaId:id,frente:fN(fid),antes:'Base (usina)',depois:`${v.tipo} ${v.codigo} · ${fN(fid)}`,...autor(),em:agora});
+      b.update(db.collection('frotas').doc(id),{base:false,manutencao:false,frenteId:fid,alteradaPor:S.sessao.nome,alteradaEm:agora});
+      b.set(db.collection('alteracoes').doc(),{tipo:'frota_saiu_base',frotaId:id,frente:fN(fid),antes:v.manutencao?'Manutenção':'Base (usina)',depois:`${v.tipo} ${v.codigo} · ${fN(fid)}`,...autor(),em:agora});
     }
     await b.commit();
   }
@@ -933,15 +934,15 @@ img{max-width:100%}
         <td class="r"><span class="confirm"><button class="btn-primary" data-salvfrota="${esc(v.id)}" type="button">Salvar</button><button class="btn-ghost" data-cancel type="button">Cancelar</button></span><div class="msg err" data-msgfrota="${esc(v.id)}"></div></td></tr>`;
       const act = S.confirm==='v:'+v.id
         ? `<span class="confirm"><span class="hint">Sai das listas; o histórico continua guardado.</span><button class="btn-danger" data-delv="${esc(v.id)}" type="button">Retirar frota</button><button class="btn-ghost" data-cancel type="button">Cancelar</button></span>`
-        : `<button class="btn-link edit" data-editfrota="${esc(v.id)}" type="button">Alterar</button> <button class="btn-link edit" data-parabase="${esc(v.id)}" type="button">Base</button> <button class="btn-link" data-ask="v:${esc(v.id)}" type="button">Retirar</button>`;
+        : `<button class="btn-link edit" data-editfrota="${esc(v.id)}" type="button">Alterar</button> <button class="btn-link edit" data-parabase="${esc(v.id)}" type="button">Base</button> <button class="btn-link edit" data-paramanut="${esc(v.id)}" type="button" title="Oficina externa (Maqnelson)">Manutenção</button> <button class="btn-link" data-ask="v:${esc(v.id)}" type="button">Retirar</button>`;
       return `<tr><td><span class="code">${esc(v.codigo)}</span>${v.exemplo?' <span class="tag ex">exemplo</span>':''}</td><td><span class="tag ${v.tipo==='Colhedora'?'col':''}">${esc(v.tipo)}</span></td><td>${esc(v.modelo||'')}</td>
         <td><select data-mover="${esc(v.id)}" aria-label="Frente da frota ${esc(v.codigo)}" style="width:auto;padding:4px 6px;font-size:.88rem${frentes.some(o=>o.id===v.frenteId)?'':';border-color:var(--crit);background:var(--crit-soft)'}">${frentes.some(o=>o.id===v.frenteId)?'':'<option value="" selected>sem frente: escolha</option>'}${frentes.map(o=>`<option value="${esc(o.id)}"${o.id===v.frenteId?' selected':''}>${esc(o.nome)}</option>`).join('')}</select></td>
         <td class="num">${l?pctTxt(l)+' · '+quando(l.quando):'–'}${v.alteradaPor?`<div class="obs-edit">alterada por ${esc(v.alteradaPor)} em ${quando(v.alteradaEm)}</div>`:''}</td><td class="r">${act}</td></tr>`; }).join('')}</tbody></table></div>`
       : '<div class="empty box">Nenhuma frota cadastrada.</div>';
     const naBase=(S.frotasTodas||[]).filter(v=>naBaseFrota(v)&&!v.retirada).sort(byCode);
-    $('#list-v-base').innerHTML = naBase.length ? `<div class="table-wrap boxed"><table><thead><tr><th>Frota</th><th>Equipamento</th><th>Modelo</th><th>Estava na</th><th>Na base desde</th><th></th></tr></thead><tbody>${naBase.map(v=>`<tr>
+    $('#list-v-base').innerHTML = naBase.length ? `<div class="table-wrap boxed"><table><thead><tr><th>Frota</th><th>Equipamento</th><th>Modelo</th><th>Onde</th><th>Estava na</th><th>Desde</th><th></th></tr></thead><tbody>${naBase.map(v=>`<tr>
         <td><span class="code">${esc(v.codigo)}</span></td><td><span class="tag ${v.tipo==='Colhedora'?'col':''}">${esc(v.tipo)}</span></td><td>${esc(v.modelo||'')}</td>
-        <td>${esc((S.frentesTodas||S.frentes).find(f=>f.id===v.frenteId)?.nome||'–')}</td><td class="num">${v.baseEm?quando(v.baseEm):'–'}${v.basePor?`<div class="obs-edit">por ${esc(v.basePor)}</div>`:''}</td>
+        <td>${v.manutencao?'<span class="chip edit">Manutenção</span>':'Base (usina)'}</td><td>${esc((S.frentesTodas||S.frentes).find(f=>f.id===v.frenteId)?.nome||'–')}</td><td class="num">${v.baseEm?quando(v.baseEm):'–'}${v.basePor?`<div class="obs-edit">por ${esc(v.basePor)}</div>`:''}</td>
         <td class="r"><span class="confirm"><select data-voltafrente="${esc(v.id)}" aria-label="Frente para onde a frota ${esc(v.codigo)} volta" style="width:auto;padding:4px 6px;font-size:.88rem">${frentes.map(o=>`<option value="${esc(o.id)}"${o.id===v.frenteId?' selected':''}>${esc(o.nome)}</option>`).join('')}</select><button class="btn-primary btn-sm" data-sairbase="${esc(v.id)}" type="button">Voltar para a frente</button></span></td></tr>`).join('')}</tbody></table></div>`
       : '<p class="hint">Nenhuma frota na base agora. Use o botão <b>Base</b> em uma frota acima para mandá-la para a usina.</p>';
     $('#base-count').textContent = naBase.length?`${naBase.length} frota(s)`:'';
@@ -1122,13 +1123,15 @@ img{max-width:100%}
       if(/^(?!TOTAL|FROTA\b)([A-Z][A-Z .\/]+?)\s+\d+\s+FROTAS?$/.test(L)){ // seção sem "F-" (ex.: BASE, OFICINA)
         const cod=L.replace(/\s+\d+\s+FROTAS?$/,'').trim(); sec=secoes.find(x=>x.cod===cod); if(!sec){ sec={cod,nome:'',frotas:[]}; secoes.push(sec); } return; }
       if(sec&&(m=L.match(/^(\d{4,6})\s+(.+?)\s+(\S+)\s+(?:(?:OK|X|P|-|\u2013)\s+){4}(?:OK|X|P|-|\u2013)(?:\s|$)/)))
-        sec.frotas.push({codigo:m[1],modelo:normModelo(m[2]),codFaz:/^\d{3,5}$/.test(m[3])?m[3]:''});
+        sec.frotas.push({codigo:m[1],modelo:normModelo(m[2]),codFaz:/^\d{3,5}$/.test(m[3])?m[3]:'',manut:ehCodManut(m[3])});
     });
     return {tipo, data:dm?dm[1]+' '+dm[2]:'', secoes, arquivo:nomeArq||''};
   }
   const REL={relatorios:[],mapa:{},desmarcados:new Set(),secoes:[]};
   // Código 9998 no relatório = frota na base (usina), em qualquer seção.
   const COD_BASE=['9998'];
+  // Código MAQNEL (Maqnelson, oficina externa) = manutenção: fora dos relatórios, como a base.
+  const ehCodManut = c => /MAQNEL/.test(String(c||''));
   const maisComum = arr => { const c={}; arr.filter(Boolean).forEach(x=>c[x]=(c[x]||0)+1); return Object.keys(c).sort((a,b)=>c[b]-c[a])[0]||''; };
   function mapaPadrao(sec){
     const fr=S.frentesTodas||[], ativas=S.frentes||[];
@@ -1146,20 +1149,21 @@ img{max-width:100%}
   }
   function relCalcular(){
     const acoes=[], iguais=[], avisos=[], vistos=new Set(), tipos=new Set(REL.relatorios.map(r=>r.tipo).filter(Boolean));
-    const todas=S.frotasTodas||[], fN=id=>id==='__base'?'Base (usina)':((S.frentesTodas||[]).find(f=>f.id===id)||{}).nome||'–';
-    const ondeEsta=v=>v.retirada?'Retirada':naBaseFrota(v)?'Base (usina)':fN(v.frenteId);
+    const todas=S.frotasTodas||[], fN=id=>id==='__base'?'Base (usina)':id==='__manut'?'Manutenção (oficina externa)':((S.frentesTodas||[]).find(f=>f.id===id)||{}).nome||'–';
+    const ondeEsta=v=>v.retirada?'Retirada':v.manutencao&&v.base?'Manutenção (oficina externa)':naBaseFrota(v)?'Base (usina)':fN(v.frenteId);
     const porCod={}, rep=[];
     REL.secoes.forEach(sec=>sec.todas.forEach(fr=>{ if(porCod[fr.codigo]&&porCod[fr.codigo].sec!==sec.cod) rep.push(fr.codigo); porCod[fr.codigo]={...fr,sec:sec.cod}; }));
     if(rep.length) avisos.push(`Frota(s) em mais de uma frente no relatório: ${[...new Set(rep)].join(', ')}. Foi usada a última que aparece.`);
-    Object.values(porCod).forEach(fr=>{ const naBaseRel=COD_BASE.includes(fr.codFaz), dest=naBaseRel&&REL.mapa[fr.sec]!=='__ign'?'__base':REL.mapa[fr.sec];
+    Object.values(porCod).forEach(fr=>{ const naBaseRel=COD_BASE.includes(fr.codFaz), ign=REL.mapa[fr.sec]==='__ign', dest=ign?'__ign':fr.manut?'__manut':naBaseRel?'__base':REL.mapa[fr.sec];
       const v=todas.find(x=>String(x.codigo)===fr.codigo&&!x.retirada)||todas.find(x=>String(x.codigo)===fr.codigo);
       if(v) vistos.add(v.id);
       if(!dest||dest==='__ign') return;
-      if(!v){ if(dest!=='__base') acoes.push({k:'nova',chave:'n:'+fr.codigo,codigo:fr.codigo,tipo:fr.tipo||'Trator',modelo:fr.modelo,para:dest,txt:`<b>${esc(fr.codigo)}</b> · ${esc(fr.tipo||'Trator')} ${esc(fr.modelo)}`,de:'não cadastrada',paraTxt:fN(dest)}); return; }
+      if(!v){ if(!dest.startsWith('__')) acoes.push({k:'nova',chave:'n:'+fr.codigo,codigo:fr.codigo,tipo:fr.tipo||'Trator',modelo:fr.modelo,para:dest,txt:`<b>${esc(fr.codigo)}</b> · ${esc(fr.tipo||'Trator')} ${esc(fr.modelo)}`,de:'não cadastrada',paraTxt:fN(dest)}); return; }
       if(fr.tipo&&v.tipo!==fr.tipo) avisos.push(`${v.codigo} está cadastrada como ${v.tipo}, mas veio no relatório de ${fr.tipo==='Colhedora'?'colhedoras':'transbordos'}.`);
-      const base={chave:'v:'+v.id,v,txt:`<b>${esc(v.codigo)}</b> · ${esc(v.tipo)} ${esc(v.modelo||'')}`+(naBaseRel?' <span class="chip nenv">código 9998 no relatório</span>':''),de:ondeEsta(v),paraTxt:fN(dest),para:dest};
+      const base={chave:'v:'+v.id,v,txt:`<b>${esc(v.codigo)}</b> · ${esc(v.tipo)} ${esc(v.modelo||'')}`+(fr.manut?' <span class="chip nenv">MAQNEL no relatório</span>':naBaseRel?' <span class="chip nenv">código 9998 no relatório</span>':''),de:ondeEsta(v),paraTxt:fN(dest),para:dest};
       if(v.retirada){ acoes.push({...base,k:'reativar'}); return; }
-      if(dest==='__base'){ if(naBaseFrota(v)) iguais.push(base); else acoes.push({...base,k:'base'}); return; }
+      if(dest==='__manut'){ if(v.base&&v.manutencao) iguais.push(base); else acoes.push({...base,k:'manut'}); return; }
+      if(dest==='__base'){ if(naBaseFrota(v)&&!v.manutencao) iguais.push(base); else acoes.push({...base,k:'base'}); return; }
       if(naBaseFrota(v)){ acoes.push({...base,k:'sairBase'}); return; }
       if(v.frenteId!==dest) acoes.push({...base,k:'mover'}); else iguais.push(base);
     });
@@ -1170,7 +1174,7 @@ img{max-width:100%}
     Object.entries(fazPorFrente).forEach(([fid,arr])=>{ const faz=maisComum(arr), f=(S.frentes||[]).find(x=>x.id===fid); if(f&&faz&&String(f.fazenda||'').trim()!==faz) acoes.push({k:'fazenda',chave:'z:'+fid,fid,faz,txt:`<b>${esc(f.nome)}</b>`,de:'Fazenda '+(f.fazenda||'não informada'),paraTxt:'Fazenda '+faz}); });
     return {acoes,iguais,avisos};
   }
-  const REL_ROT={mover:'Mudou de frente',sairBase:'Voltou da base',reativar:'Volta a ser ativa',nova:'Frota nova (cadastrar)',base:'Vai para a base',fazenda:'Fazenda da frente'};
+  const REL_ROT={manut:'Vai para manutenção (oficina externa)',mover:'Mudou de frente',sairBase:'Voltou da base',reativar:'Volta a ser ativa',nova:'Frota nova (cadastrar)',base:'Vai para a base',fazenda:'Fazenda da frente'};
   function relRender(){
     const box=$('#rel-prev'); if(!REL.relatorios.length){ box.hidden=true; box.innerHTML=''; return; }
     const frentesOpt=[...(S.frentes||[])].sort(byNome);
@@ -1179,7 +1183,7 @@ img{max-width:100%}
     const faltaMapa=REL.secoes.filter(s=>!REL.mapa[s.cod]);
     const mapaHtml=`<div class="table-wrap boxed"><table><thead><tr><th>No relatório</th><th>Frotas</th><th>Frente no site</th></tr></thead><tbody>${REL.secoes.map(s=>`<tr><td><b>${esc(s.cod)}</b> ${esc(s.nomes.join(' / '))}</td><td>${s.todas.length}</td>
       <td><select data-relmapa="${esc(s.cod)}"><option value="">— escolha —</option>${frentesOpt.map(f=>`<option value="${esc(f.id)}"${REL.mapa[s.cod]===f.id?' selected':''}>${esc(f.nome)}${f.fazenda?' · Faz. '+esc(f.fazenda):''}</option>`).join('')}<option value="__base"${REL.mapa[s.cod]==='__base'?' selected':''}>Base (usina)</option><option value="__ign"${REL.mapa[s.cod]==='__ign'?' selected':''}>Ignorar esta seção</option></select></td></tr>`).join('')}</tbody></table></div>`;
-    const grupos=['mover','sairBase','reativar','nova','base','fazenda'].map(k=>({k,it:r.acoes.filter(a=>a.k===k)})).filter(g=>g.it.length);
+    const grupos=['mover','sairBase','reativar','nova','base','manut','fazenda'].map(k=>({k,it:r.acoes.filter(a=>a.k===k)})).filter(g=>g.it.length);
     const marcadas=r.acoes.filter(a=>!REL.desmarcados.has(a.chave)).length;
     const lista=grupos.map(g=>`<h3>${REL_ROT[g.k]} (${g.it.length})</h3><div class="table-wrap boxed"><table class="rel-acoes"><thead><tr><th></th><th>${g.k==='fazenda'?'Frente':'Frota'}</th><th>Hoje no site</th><th>Vai ficar</th></tr></thead><tbody>${g.it.map(a=>`<tr><td><input type="checkbox" data-relchk="${esc(a.chave)}"${REL.desmarcados.has(a.chave)?'':' checked'} aria-label="Aplicar"></td><td>${a.txt}${a.sumiu?' <span class="chip nenv">não veio no relatório</span>':''}</td><td>${esc(a.de)}</td><td><b>${esc(a.paraTxt)}</b></td></tr>`).join('')}</tbody></table></div>`).join('');
     box.hidden=false;
@@ -1198,7 +1202,8 @@ img{max-width:100%}
       else if(a.k==='mover') await moverFrota(a.v.id,a.para);
       else if(a.k==='sairBase') await baseFrota(a.v.id,false,a.para);
       else if(a.k==='base') await baseFrota(a.v.id,true);
-      else if(a.k==='reativar'){ await retirarFrota(a.v.id,false); if(a.para==='__base'){ if(!naBaseFrota(a.v)) await baseFrota(a.v.id,true); } else if(a.v.base||naBaseFrota(a.v)) await baseFrota(a.v.id,false,a.para); else if(a.v.frenteId!==a.para) await moverFrota(a.v.id,a.para); }
+      else if(a.k==='manut') await baseFrota(a.v.id,true,null,true);
+      else if(a.k==='reativar'){ await retirarFrota(a.v.id,false); if(a.para==='__base'||a.para==='__manut'){ await baseFrota(a.v.id,true,null,a.para==='__manut'); } else if(a.v.base||naBaseFrota(a.v)) await baseFrota(a.v.id,false,a.para); else if(a.v.frenteId!==a.para) await moverFrota(a.v.id,a.para); }
       else if(a.k==='fazenda') await alterarFazenda(a.fid,a.faz);
       ok++; }catch(err){ falhas.push(`${a.v?a.v.codigo:a.codigo||a.fid}: ${erroTxt(err)}`); } }
     // guarda qual seção do relatório é cada frente, para as próximas vezes (só a administradora pode)
@@ -1378,7 +1383,7 @@ img{max-width:100%}
       : '<div class="empty box">Nenhum lançamento ainda.</div>';
     const fN=id=>{ const v=(S.frotasTodas||S.frotas).find(x=>x.id===id); return v?v.codigo:'?'; };
     const vtxt=x=>x?`${x.pct!=null?Math.round(x.pct)+'%':''}${x.horimetro!=null?' · '+nf1.format(x.horimetro)+' h':''}${x.quando?' · '+quando(x.quando):''}${x.responsavel?' · '+esc(x.responsavel):''}`:'';
-    const TIPO={correcao:'Correção',anulacao:'Anulação',reativacao:'Reativação',fazenda:'Fazenda',frota_adicionada:'Frota adicionada',frota_retirada:'Frota retirada',frota_reativada:'Frota reativada',frota_frente:'Frota mudou de frente',frota_editada:'Frota alterada',frota_base:'Foi para a base',frota_saiu_base:'Voltou da base'};
+    const TIPO={correcao:'Correção',anulacao:'Anulação',reativacao:'Reativação',fazenda:'Fazenda',frota_adicionada:'Frota adicionada',frota_retirada:'Frota retirada',frota_reativada:'Frota reativada',frota_frente:'Frota mudou de frente',frota_editada:'Frota alterada',frota_base:'Foi para a base',frota_manutencao:'Foi para manutenção',frota_saiu_base:'Voltou da base'};
     const txtFrota=a=>a.tipo.startsWith('frota_');
     S.altLim=S.altLim||100; const alt=(S.alteracoes||[]).slice(0,S.altLim);
     $('#alteracoes').innerHTML = alt.length ? `<div class="table-wrap boxed"><table><thead><tr><th>Quando</th><th>Usuário</th><th>Tipo</th><th>Onde</th><th>Antes</th><th>Depois</th><th>Motivo</th></tr></thead><tbody>${alt.map(a=>`<tr>
@@ -1684,6 +1689,7 @@ img{max-width:100%}
       try{ await editarFrota(d.salvfrota,{codigo:tr.querySelector('.efv-cod').value,tipo:tr.querySelector('.efv-tipo').value,modelo:tr.querySelector('.efv-mod').value,frenteId:tr.querySelector('.efv-frente').value}); S.editFrota=null; render(); }
       catch(err){ m.textContent=erroTxt(err); t.disabled=false; } }
     else if(d.parabase){ try{ await baseFrota(d.parabase,true); }catch(err){ falhou(err); } render(); }
+    else if(d.paramanut){ try{ await baseFrota(d.paramanut,true,null,true); }catch(err){ falhou(err); } render(); }
     else if(d.sairbase){ const sel=document.querySelector(`[data-voltafrente="${d.sairbase}"]`); try{ await baseFrota(d.sairbase,false,sel?sel.value:null); }catch(err){ falhou(err); } render(); }
     else if(d.reatv){ try{ await retirarFrota(d.reatv,false); }catch(err){ falhou(err); } render(); }
     else if(d.editar){ S.confirm=null; S.editando=d.editar; render(); const i=document.querySelector(`tr[data-ed="${d.editar}"] .ed-pct`); if(i){ i.focus(); i.select(); } }
