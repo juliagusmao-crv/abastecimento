@@ -313,7 +313,7 @@ img{max-width:100%}
     </form>
     <div class="legend" aria-label="Legenda de nível">
       <span><i class="lv-ok"></i>acima de 50%</span><span><i class="lv-warn"></i>25 a 50%</span><span><i class="lv-crit"></i>abaixo de 25%</span>
-      <span>· horário em vermelho e aviso "desatualizado": mais de 8 h sem informação nova</span>
+      <span>· horário em vermelho e aviso "desatualizado": 6 h ou mais sem informação nova</span>
     </div>
     <div id="frentes" style="display:grid;gap:18px"></div>
   </div>
@@ -711,7 +711,7 @@ img{max-width:100%}
 
   // ---- cálculos ----
   // frente sem informação nova há mais que isso aparece como DESATUALIZADA (tela e PDF)
-  const LIMITE_DESATUALIZADO_H = 8;
+  const LIMITE_DESATUALIZADO_H = 6;
   const fmtHoras = h => h<48 ? `${Math.floor(h)} h` : `${Math.floor(h/24)} dias`;
   function ultimaDaFrente(fs,u){ return fs.map(v=>u[v.id]).filter(Boolean).map(l=>l.quando).sort().pop()||null; }
   const temPct = l => !!l && l.pct!=null && !isNaN(l.pct);
@@ -842,7 +842,7 @@ img{max-width:100%}
     $('#frentes').innerHTML = lista.length ? lista.map(f=>{
       const fs=S.frotas.filter(v=>v.frenteId===f.id).sort((a,b)=>(a.tipo===b.tipo?0:a.tipo==='Colhedora'?-1:1)||byCode(a,b));
       const mc=media(fs.filter(v=>v.tipo==='Colhedora'),u), mt=media(fs.filter(v=>v.tipo==='Trator'),u);
-      const linhas = fs.map(v=>{ const l=u[v.id], c=lv(temPct(l)?Number(l.pct):null), velho=l && horasDesde(l.quando)>LIMITE_DESATUALIZADO_H;
+      const linhas = fs.map(v=>{ const l=u[v.id], c=lv(temPct(l)?Number(l.pct):null), velho=l && horasDesde(l.quando)>=LIMITE_DESATUALIZADO_H;
         return `<tr><td><span class="code">${esc(v.codigo)}</span>${v.exemplo?' <span class="tag ex">exemplo</span>':''}</td>
           <td><span class="tag ${v.tipo==='Colhedora'?'col':''}">${esc(v.tipo)}</span> ${esc(v.modelo||'')}</td>
           <td>${l&&!temPct(l)?NAO_ENV:l?`<span class="lvl"><span class="tank"><i class="lv-${c}" style="width:${Number(l.pct)}%"></i></span><b>${Math.round(l.pct)}%</b></span>`:'<span class="hint">sem informação</span>'}</td>
@@ -853,7 +853,7 @@ img{max-width:100%}
           <div class="f-title"><h3>${esc(f.nome)}${f.exemplo?' <span class="tag ex">exemplo</span>':''}</h3><div class="fazenda inline-edit">${S.editFazG===f.id
             ? `Fazenda: <input type="text" id="fazg-${esc(f.id)}" value="${esc(f.fazenda||'')}" aria-label="Fazenda da ${esc(f.nome)}"><button class="btn-primary btn-sm" data-savefazg="${esc(f.id)}" type="button">Salvar</button><button class="btn-ghost btn-sm" data-cancel type="button">Cancelar</button>`
             : `Fazenda: <b>${f.fazenda?esc(f.fazenda):'não informada'}</b> <button class="btn-link edit" data-editfazg="${esc(f.id)}" type="button">Alterar fazenda</button>${f.fazendaAlteradaPor?`<span class="hint" style="display:inline"> · alterada por ${esc(f.fazendaAlteradaPor)} em ${quando(f.fazendaAlteradaEm)}</span>`:''}`}</div>
-          <div class="fazenda">Última informação: <b>${(()=>{ const t=ultimaDaFrente(fs,u); return t?quando(t):'nenhuma'; })()}</b>${(()=>{ const t=ultimaDaFrente(fs,u); if(!fs.length) return ''; if(!t) return ' <span class="desat">Atenção: sem informação</span>'; const h=horasDesde(t); return h>LIMITE_DESATUALIZADO_H?` <span class="desat">Atenção: desatualizado · há ${fmtHoras(h)}</span>`:''; })()}</div></div>
+          <div class="fazenda">Última informação: <b>${(()=>{ const t=ultimaDaFrente(fs,u); return t?quando(t):'nenhuma'; })()}</b>${(()=>{ const t=ultimaDaFrente(fs,u); if(!fs.length) return ''; if(!t) return ' <span class="desat">Atenção: sem informação</span>'; const h=horasDesde(t); return h>=LIMITE_DESATUALIZADO_H?` <span class="desat">Atenção: desatualizado · há ${fmtHoras(h)}</span>`:''; })()}</div></div>
           <div class="gauges">${gauge('Colhedoras',mc)}${gauge('Tratores',mt)}</div></div>
         ${fs.length?`<div class="table-wrap"><table><thead><tr><th>Frota</th><th>Equipamento</th><th>% combustível</th><th class="r">Horímetro</th><th>Horário informado</th><th>Responsável pela informação</th></tr></thead><tbody>${linhas}</tbody></table></div>`
           :`<div class="empty">Nenhuma frota nesta frente.</div>`}</article>`; }).join('')
@@ -1552,7 +1552,7 @@ img{max-width:100%}
       doc.setFont('helvetica','normal'); doc.setFontSize(7.8); doc.setTextColor(83,98,127);
       doc.text(`Fazenda: ${f.fazenda||'não informada'}    Última informação: ${tUlt?quando(tUlt):'nenhuma'}`,mx+3,y+9.6);
       { const hD=tUlt?horasDesde(tUlt):Infinity;
-        if(fs.length&&hD>LIMITE_DESATUALIZADO_H){ const txt=tUlt?`ATENÇÃO: DESATUALIZADO · HÁ ${fmtHoras(hD).toUpperCase()}`:'ATENÇÃO: SEM INFORMAÇÃO';
+        if(fs.length&&hD>=LIMITE_DESATUALIZADO_H){ const txt=tUlt?`ATENÇÃO: DESATUALIZADO · HÁ ${fmtHoras(hD).toUpperCase()}`:'ATENÇÃO: SEM INFORMAÇÃO';
           // fica na linha do nome da frente, antes dos quadros de colhedoras/tratores (que começam em W-mx-84)
           doc.setFont('helvetica','bold'); doc.setFontSize(11.5); const x0=mx+3+doc.getTextWidth(f.nome.toUpperCase())+3, lim=W-mx-84-2;
           doc.setFontSize(7); let t2=txt; if(x0+doc.getTextWidth(t2)+5>lim) t2=tUlt?`DESATUALIZADO · ${fmtHoras(hD).toUpperCase()}`:'SEM INFORMAÇÃO';
@@ -1579,7 +1579,7 @@ img{max-width:100%}
         didParseCell:dd=>{ if(dd.section!=='body'||!fs.length) return; const v=fs[dd.row.index], l=v&&u[v.id];
           if(dd.column.index===2&&temPct(l)){ dd.cell.styles.fontStyle='bold'; }
           if(dd.column.index===2&&!temPct(l)){ dd.cell.styles.textColor=[83,98,127]; dd.cell.styles.halign='left'; }
-          if(dd.column.index===4&&l&&horasDesde(l.quando)>LIMITE_DESATUALIZADO_H){ dd.cell.styles.textColor=[176,58,46]; dd.cell.styles.fontStyle='bold'; } },
+          if(dd.column.index===4&&l&&horasDesde(l.quando)>=LIMITE_DESATUALIZADO_H){ dd.cell.styles.textColor=[176,58,46]; dd.cell.styles.fontStyle='bold'; } },
         didDrawCell:dd=>{ if(dd.section!=='body'||dd.column.index!==2||!fs.length) return; const v=fs[dd.row.index], l=v&&u[v.id]; if(!temPct(l)) return;
           const p=Number(l.pct), bx=dd.cell.x+1.6, bw=dd.cell.width-13, by=dd.cell.y+dd.cell.height/2-1.1;
           doc.setFillColor(226,232,240); doc.roundedRect(bx,by,bw,2.2,1,1,'F');
@@ -1588,7 +1588,7 @@ img{max-width:100%}
     });
     const n=doc.getNumberOfPages();
     for(let i=1;i<=n;i++){ doc.setPage(i); doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(83,98,127);
-      doc.text('Nível: verde acima de 50% · amarelo 25 a 50% · vermelho abaixo de 25%. Horário em vermelho / DESATUALIZADO: mais de 8 h sem informação nova.',mx,H-6);
+      doc.text('Nível: verde acima de 50% · amarelo 25 a 50% · vermelho abaixo de 25%. Horário em vermelho / DESATUALIZADO: 6 h ou mais sem informação nova.',mx,H-6);
       doc.text(`Página ${i} de ${n}`,W-mx,H-6,{align:'right'}); }
     const slug=(fil?frentes[0].nome:'todas-as-frentes').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').toLowerCase();
     const d=new Date(); await salvarPDF(doc,`abastecimento-${slug}-${hojeStr()}-${pad(d.getHours())}h${pad(d.getMinutes())}.pdf`);
