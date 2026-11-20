@@ -1608,7 +1608,7 @@ img{max-width:100%}
     for(let i=1;i<=n;i++){ doc.setPage(i); doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(83,98,127);
       doc.text('Nível: verde acima de 50% · amarelo 25 a 50% · vermelho abaixo de 25%. Horário em vermelho / DESATUALIZADO: 6 h ou mais sem informação nova.',mx,H-6);
       doc.text(`Página ${i} de ${n}`,W-mx,H-6,{align:'right'}); }
-    const slug=(fil?frentes[0].nome:'todas-as-frentes').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').toLowerCase();
+    const slug=nomeFiltro(frentes).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').toLowerCase();
     const d=new Date(); await salvarPDF(doc,`abastecimento-${slug}-${hojeStr()}-${pad(d.getHours())}h${pad(d.getMinutes())}.pdf`);
   }
 
