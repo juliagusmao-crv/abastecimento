@@ -111,6 +111,16 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:end;justify-content:space-between;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
 .toolbar .filters{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
 .toolbar .filters label{min-width:150px}
+.multi-wrap{display:grid;gap:4px;min-width:190px;font-size:.85rem;font-weight:600;color:var(--muted)}
+.multi{position:relative}
+.multi summary{list-style:none;cursor:pointer;border:1px solid var(--line);border-radius:8px;padding:8px 30px 8px 10px;background:var(--surface);color:var(--fg);font-weight:500;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px;position:relative}
+.multi summary::-webkit-details-marker{display:none}
+.multi summary::after{content:"▾";position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.multi-op{position:absolute;z-index:30;top:calc(100% + 4px);left:0;min-width:240px;max-height:320px;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(20,33,61,.15);padding:6px}
+.multi-op label{text-transform:none;letter-spacing:normal;font-size:.95rem;display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:6px;font-weight:500;color:var(--fg);min-width:0;cursor:pointer}
+.multi-op label:hover{background:var(--surface-2)}
+.multi-op input{width:auto;margin:0}
+.multi-op .sep{border-top:1px solid var(--line);margin:4px 0}
 
 /* lançamento */
 .launch{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,.95fr) minmax(0,.8fr) minmax(0,1.5fr) minmax(0,1.1fr) auto;gap:12px;align-items:end}
@@ -278,7 +288,7 @@ img{max-width:100%}
 
   <div class="toolbar" id="toolbar" hidden>
     <div class="filters">
-      <label for="r-frente">Frente<select id="r-frente"><option value="">Todas as frentes</option></select></label>
+      <div class="multi-wrap"><span class="multi-rot">Frentes</span><details class="multi" id="r-frente-dd"><summary id="r-frente-txt">Todas as frentes</summary><div class="multi-op" id="r-frente-op"></div></details></div>
       <button class="btn-ghost btn-sm per" id="btn-todo-periodo" type="button" style="align-self:end">Todo o período</button>
       <label for="r-de" class="per">De<input type="date" id="r-de"></label>
       <label for="r-ate" class="per">Até<input type="date" id="r-ate"></label>
@@ -725,11 +735,22 @@ img{max-width:100%}
         u[l.frotaId]={...novo, pct:temPct(novo)?novo.pct:velho.pct, horimetro:novo.horimetro!=null?novo.horimetro:velho.horimetro}; } });
     return u; }
   function media(frotas,u){ const v=frotas.map(f=>u[f.id]).filter(temPct).map(l=>Number(l.pct)); return { pct: v.length ? v.reduce((a,b)=>a+b,0)/v.length : null, com: v.length, total: frotas.length }; }
+  // Filtro de frentes (uma, várias ou todas). Vazio = todas.
+  S.filtroF=new Set();
+  const selF = () => S.filtroF.size ? S.filtroF : null;
+  const passaF = fid => !S.filtroF.size || S.filtroF.has(fid);
+  function nomeFiltro(frentes){ if(!S.filtroF.size) return 'Todas as frentes'; const ns=frentes.map(f=>f.nome); return ns.length<=3?ns.join(' · '):`${ns.length} frentes`; }
+  function renderFiltroF(frentes){
+    [...S.filtroF].forEach(id=>{ if(!frentes.some(f=>f.id===id)) S.filtroF.delete(id); });
+    $('#r-frente-op').innerHTML=`<label><input type="checkbox" data-ftodas${S.filtroF.size?'':' checked'}> Todas as frentes</label><div class="sep"></div>`+
+      frentes.map(f=>`<label><input type="checkbox" data-ff="${esc(f.id)}"${S.filtroF.has(f.id)?' checked':''}> ${esc(f.nome)}${f.fazenda?' <span class="hint" style="display:inline">· '+esc(f.fazenda)+'</span>':''}</label>`).join('');
+    $('#r-frente-txt').textContent=nomeFiltro(frentes.filter(f=>S.filtroF.has(f.id)));
+  }
   function relatorio(){
-    const frenteId=$('#r-frente').value, de=$('#r-de').value, ate=$('#r-ate').value;
+    const de=$('#r-de').value, ate=$('#r-ate').value;
     const fMap={}; S.frentes.forEach(f=>fMap[f.id]=f);
     const nomeF = v => (fMap[v.frenteId]||{}).nome||'';
-    const frotas=(S.frotasTodas||S.frotas).filter(v=>!naBaseFrota(v)&&(!frenteId||v.frenteId===frenteId))
+    const frotas=(S.frotasTodas||S.frotas).filter(v=>!naBaseFrota(v)&&passaF(v.frenteId))
       .sort((a,b)=>nomeF(a).localeCompare(nomeF(b),'pt-BR',{numeric:true})||(a.tipo===b.tipo?0:a.tipo==='Colhedora'?-1:1)||byCode(a,b));
     const inP = iso => { const d=localDay(iso); return (!de||d>=de)&&(!ate||d<=ate); };
     const linhas=[], maquinas=[];
@@ -750,7 +771,7 @@ img{max-width:100%}
     });
     linhas.sort((a,b)=>(a.quando||'').localeCompare(b.quando||''));
     const rotulo = de&&ate ? `${fmtD(de)} a ${fmtD(ate)}` : de ? `a partir de ${fmtD(de)}` : ate ? `até ${fmtD(ate)}` : 'todo o período';
-    return {frente:frenteId, linhas, maquinas, rotulo};
+    return {frente:selF(), linhas, maquinas, rotulo};
   }
 
   // ---- abas ----
@@ -800,9 +821,7 @@ img{max-width:100%}
       return fs.length?`<optgroup label="${esc(f.nome)}${f.fazenda?' · '+esc(f.fazenda):''}">${fs.map(v=>`<option value="${esc(v.id)}">${esc(v.codigo)} · ${esc(v.tipo)}${v.modelo?' · '+esc(v.modelo):''}</option>`).join('')}</optgroup>`:''; }).join('');
     sel.innerHTML = grupos ? '<option value="">Selecione a frota…</option>'+grupos : '<option value="">Nenhuma frota cadastrada</option>';
     sel.value = S.frotas.some(v=>v.id===sv)?sv:''; hintL(u);
-    const hf=$('#r-frente'), hfv=hf.value;
-    hf.innerHTML='<option value="">Todas as frentes</option>'+frentes.map(f=>`<option value="${esc(f.id)}">${esc(f.nome)}${f.fazenda?' · '+esc(f.fazenda):''}</option>`).join('');
-    hf.value = frentes.some(f=>f.id===hfv)?hfv:'';
+    renderFiltroF(frentes);
     const vf=$('#v-frente'), vfv=vf.value;
     vf.innerHTML = frentes.length ? frentes.map(f=>`<option value="${esc(f.id)}">${esc(f.nome)}</option>`).join('') : '<option value="">Crie uma frente primeiro</option>';
     if(frentes.some(f=>f.id===vfv)) vf.value=vfv;
@@ -837,8 +856,7 @@ img{max-width:100%}
   }
 
   function renderGeral(frentes,u){
-    const fil=$('#r-frente').value;
-    const lista=frentes.filter(f=>!fil||f.id===fil);
+    const lista=frentes.filter(f=>passaF(f.id));
     $('#frentes').innerHTML = lista.length ? lista.map(f=>{
       const fs=S.frotas.filter(v=>v.frenteId===f.id).sort((a,b)=>(a.tipo===b.tipo?0:a.tipo==='Colhedora'?-1:1)||byCode(a,b));
       const mc=media(fs.filter(v=>v.tipo==='Colhedora'),u), mt=media(fs.filter(v=>v.tipo==='Trator'),u);
@@ -873,14 +891,14 @@ img{max-width:100%}
           <div><span class="k">Autonomia</span><span class="v">${m.autonomia!=null?'~'+nf1.format(m.autonomia)+' h':'–'}</span></div></div>
         <div class="mbar" aria-hidden="true"><i class="lv-${c||'ok'}" style="width:${m.atual!=null?m.atual:0}%"></i></div>
         <div class="mfoot"><span>${nf1.format(m.horas)} h trabalhadas · ${m.abast} abastec.</span><span class="num">Hor. ${m.hor!=null?nf1.format(m.hor)+' h':'–'}</span></div></article>`; };
-    const gruposF=[...S.frentes].filter(f=>!R.frente||f.id===R.frente).sort(byNome).map(f=>({f,ms:R.maquinas.filter(m=>m.v.frenteId===f.id)})).filter(g=>g.ms.length);
+    const gruposF=[...S.frentes].filter(f=>passaF(f.id)).sort(byNome).map(f=>({f,ms:R.maquinas.filter(m=>m.v.frenteId===f.id)})).filter(g=>g.ms.length);
     $('#machines').innerHTML = gruposF.length ? gruposF.map(({f,ms})=>{ const gc=resumoTipo(ms,'Colhedora'), gt=resumoTipo(ms,'Trator');
       const st=(rot,g)=>g.n?`<span class="mg-stat">${rot}: <strong>${g.cons!=null?nf1.format(g.cons)+' %/h':'–'}</strong> · ${nf1.format(g.horas)} h · ${g.ab} abastec.</span>`:'';
       return `<section class="mgroup"><div class="mg-head"><span><b>${esc(f.nome)}</b> <span class="hint" style="display:inline">· Fazenda ${esc(f.fazenda||'–')}</span></span><span class="mg-stats">${st('Colhedoras',gc)}${st('Tratores',gt)}</span></div>
         <div class="machines">${ms.map(card).join('')}</div></section>`; }).join('')
-      : `<div class="empty box">Nenhuma frota ${R.frente?'nesta frente':'cadastrada'}.</div>`;
+      : `<div class="empty box">Nenhuma frota ${R.frente?'nas frentes escolhidas':'cadastrada'}.</div>`;
     const adm=ehAdmin();
-    const anulados=(S.todas||[]).filter(l=>l.anulado&&(()=>{ const v=(S.frotasTodas||S.frotas).find(x=>x.id===l.frotaId); if(!v||naBaseFrota(v)||(R.frente&&v.frenteId!==R.frente)) return false;
+    const anulados=(S.todas||[]).filter(l=>l.anulado&&(()=>{ const v=(S.frotasTodas||S.frotas).find(x=>x.id===l.frotaId); if(!v||naBaseFrota(v)||!passaF(v.frenteId)) return false;
       const d=localDay(l.quando), de=$('#r-de').value, ate=$('#r-ate').value; return (!de||d>=de)&&(!ate||d<=ate); })())
       .map(l=>{ const v=(S.frotasTodas||S.frotas).find(x=>x.id===l.frotaId); return {...l,v,f:S.frentes.find(f=>f.id===v.frenteId),dp:undefined,dh:null}; });
     const hist=[...R.linhas,...anulados].sort((a,b)=>(b.quando||'').localeCompare(a.quando||'')||(b.lancadoEm||'').localeCompare(a.lancadoEm||''));
@@ -909,7 +927,7 @@ img{max-width:100%}
           <td>${esc(l.v.tipo)}</td><td class="r num">${temPct(l)?Math.round(l.pct)+'%':NAO_ENV}</td><td>${varTxt}</td><td class="r num">${l.horimetro!=null?nf1.format(l.horimetro)+' h':'–'}</td>
           <td class="r num">${l.dh!=null?nf1.format(l.dh):'–'}</td><td class="obs">${esc(nomeInfo(l))}${obs}${l.horRejeitado?`<div class="obs-edit">horímetro recebido ${esc(l.horRejeitado.valor)} não foi salvo (${esc(l.horRejeitado.motivo)})</div>`:''}</td></tr>`; }).join('')}</tbody></table></div>
       ${hist.length>vis.length?`<div class="mais"><button class="btn-ghost" id="btn-hist-mais" type="button">Mostrar mais (${hist.length-vis.length} restantes)</button></div>`:''}`
-      : `<div class="empty box">Nenhuma informação lançada ${R.frente?'nesta frente ':''}no período. Mude as datas, clique em <b>Todo o período</b> ou lance na aba <b>Lançar informações</b>.</div>`;
+      : `<div class="empty box">Nenhuma informação lançada ${R.frente?'nas frentes escolhidas ':''}no período. Mude as datas, clique em <b>Todo o período</b> ou lance na aba <b>Lançar informações</b>.</div>`;
   }
 
   function renderFrotas(frentes,u){
@@ -1292,8 +1310,8 @@ img{max-width:100%}
     const l=S.leituras.filter(x=>vs.has(x.frotaId)&&x.responsavel).sort((a,b)=>(b.quando||'').localeCompare(a.quando||''))[0];
     const f=S.frentes.find(x=>x.id===fid); return l?l.responsavel:((f&&f.responsavel)||''); }
   function renderLote(frentes,u){
-    const fil=$('#r-frente').value, lista=frentes.filter(f=>!fil||f.id===fil);
-    const chave=fil+'|'+lista.map(f=>f.id+':'+S.frotas.filter(v=>v.frenteId===f.id).map(v=>v.id+v.tipo).join(',')).join(';');
+    const lista=frentes.filter(f=>passaF(f.id));
+    const chave=[...S.filtroF].join(',')+'|'+lista.map(f=>f.id+':'+S.frotas.filter(v=>v.frenteId===f.id).map(v=>v.id+v.tipo).join(',')).join(';');
     const box=$('#lote');
     if(chave===S.loteChave && box.childElementCount){ // só atualiza a coluna "última informação", sem apagar o que está sendo digitado
       box.querySelectorAll('[data-ult]').forEach(td=>{ td.textContent=ultTxt(u[td.dataset.ult]); }); return; }
@@ -1420,11 +1438,11 @@ img{max-width:100%}
     const J=window.jspdf;
     if(!J||!J.jsPDF){ msg.className='msg err'; msg.textContent='O gerador de PDF não carregou. Recarregue a página.'; return; }
     const R=relatorio();
-    const frentes=[...S.frentes].filter(f=>!R.frente||f.id===R.frente).sort(byNome);
+    const frentes=[...S.frentes].filter(f=>passaF(f.id)).sort(byNome);
     if(!frentes.length){ msg.className='msg err'; msg.textContent='Não há frentes para exportar.'; return; }
     const doc=new J.jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
     const W=doc.internal.pageSize.getWidth(), H=doc.internal.pageSize.getHeight(), mx=10;
-    let y=cabecalhoPDF(doc,mx,`Consumo por máquina  ·  ${R.frente?frentes[0].nome:'Todas as frentes'}  ·  ${R.rotulo}`);
+    let y=cabecalhoPDF(doc,mx,`Consumo por máquina  ·  ${nomeFiltro(frentes)}  ·  ${R.rotulo}`);
     const cols=4, gap=3, cw=(W-2*mx-gap*(cols-1))/cols, ch=24;
     const card=(m,x,yy)=>{ const p=m.atual, cor=corNivel(p);
       doc.setFillColor(255,255,255); doc.setDrawColor(203,213,230); doc.setLineWidth(.25); doc.roundedRect(x,yy,cw,ch,1.6,1.6,'FD');
@@ -1461,7 +1479,7 @@ img{max-width:100%}
     for(let i=1;i<=n;i++){ doc.setPage(i); doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(83,98,127);
       doc.text('Consumo = queda da % ÷ horas do horímetro entre informações seguidas (abastecimentos não entram). Autonomia = % atual ÷ consumo médio.',mx,H-6);
       doc.text(`Página ${i} de ${n}`,W-mx,H-6,{align:'right'}); }
-    const slug=(R.frente?frentes[0].nome:'todas-as-frentes').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').toLowerCase();
+    const slug=nomeFiltro(frentes).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').toLowerCase();
     await salvarPDF(doc,`consumo-${slug}-${hojeStr()}.pdf`);
   }
 
@@ -1502,7 +1520,7 @@ img{max-width:100%}
     const R=relatorio(), adm=ehAdmin();
     const cab=['Horário informado','Lançado no site','Frente','Fazenda','Frota','Equipamento','Modelo','% combustível','Variação (p.p.)','Abastecida','Horímetro (h)','Horas desde a anterior','Responsável pela informação','Situação','Corrigido por','Corrigido em','Valor antes da correção','Motivo'].concat(adm?['Usuário que lançou','Origem']:[]);
     const de=$('#r-de').value, ate=$('#r-ate').value;
-    const anul=(S.todas||[]).filter(l=>{ if(!l.anulado) return false; const v=(S.frotasTodas||S.frotas).find(x=>x.id===l.frotaId); if(!v||naBaseFrota(v)||(R.frente&&v.frenteId!==R.frente)) return false; const d=localDay(l.quando); return (!de||d>=de)&&(!ate||d<=ate); })
+    const anul=(S.todas||[]).filter(l=>{ if(!l.anulado) return false; const v=(S.frotasTodas||S.frotas).find(x=>x.id===l.frotaId); if(!v||naBaseFrota(v)||!passaF(v.frenteId)) return false; const d=localDay(l.quando); return (!de||d>=de)&&(!ate||d<=ate); })
       .map(l=>{ const v=(S.frotasTodas||S.frotas).find(x=>x.id===l.frotaId); return {...l,v,f:S.frentes.find(f=>f.id===v.frenteId),dp:null,dh:null}; });
     const linhas=[...R.linhas,...anul].sort((a,b)=>(a.quando||'').localeCompare(b.quando||''));
     const ult=l=>{ const e=l.edicoes||[]; return e[e.length-1]||null; };
@@ -1523,7 +1541,7 @@ img{max-width:100%}
     const ws2=X.utils.aoa_to_sheet(sit); ws2['!cols']=sit[0].map(h=>({wch:Math.max(11,h.length+2)})); ws2['!autofilter']={ref:ws2['!ref']};
     const wb=X.utils.book_new(); X.utils.book_append_sheet(wb,ws,'Histórico'); X.utils.book_append_sheet(wb,ws2,'Situação atual');
     const out=X.write(wb,{bookType:'xlsx',type:'array'});
-    const slug=(R.frente?((S.frentes.find(f=>f.id===R.frente)||{}).nome||'frente'):'todas-as-frentes').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').toLowerCase();
+    const slug=nomeFiltro([...S.frentes].filter(f=>passaF(f.id)).sort(byNome)).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').toLowerCase();
     await salvarArquivo(out,`historico-abastecimento-${slug}-${hojeStr()}.xlsx`,msg);
   }
   async function salvarPDF(doc,nome){ await salvarArquivo(doc.output('blob'),nome,$('#msg-pdf')); }
@@ -1533,12 +1551,12 @@ img{max-width:100%}
     const msg=$('#msg-pdf'); msg.className='msg'; msg.textContent='';
     const J=window.jspdf;
     if(!J||!J.jsPDF){ msg.className='msg err'; msg.textContent='O gerador de PDF não carregou. Recarregue a página.'; return; }
-    const fil=$('#r-frente').value, u=ultimas();
-    const frentes=[...S.frentes].filter(f=>!fil||f.id===fil).sort(byNome);
+    const u=ultimas();
+    const frentes=[...S.frentes].filter(f=>passaF(f.id)).sort(byNome);
     if(!frentes.length){ msg.className='msg err'; msg.textContent='Não há frentes para exportar.'; return; }
     const doc=new J.jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
     const W=doc.internal.pageSize.getWidth(), H=doc.internal.pageSize.getHeight(), mx=10, azul=[31,74,168];
-    let y=cabecalhoPDF(doc,mx,fil?frentes[0].nome:'Todas as frentes');
+    let y=cabecalhoPDF(doc,mx,nomeFiltro(frentes));
     const ROW=4.9;
     frentes.forEach(f=>{
       const fs=S.frotas.filter(v=>v.frenteId===f.id).sort((a,b)=>(a.tipo===b.tipo?0:a.tipo==='Colhedora'?-1:1)||byCode(a,b));
@@ -1603,7 +1621,11 @@ img{max-width:100%}
   rr.addEventListener('input',()=>nn.value=rr.value);
   nn.addEventListener('input',()=>{ rr.value=Math.max(0,Math.min(100,Number(nn.value)||0)); });
   $('#l-frota').addEventListener('change',()=>hintL());
-  ['#r-frente','#r-de','#r-ate'].forEach(s=>$(s).addEventListener('change',render));
+  ['#r-de','#r-ate'].forEach(s=>$(s).addEventListener('change',render));
+  $('#r-frente-op').addEventListener('change',e=>{ const t=e.target;
+    if(t.dataset.ftodas!==undefined) S.filtroF.clear(); else if(t.dataset.ff){ if(t.checked) S.filtroF.add(t.dataset.ff); else S.filtroF.delete(t.dataset.ff); }
+    render(); if(!$('#modelo-box').hidden) renderModelos(); });
+  document.addEventListener('click',e=>{ const d=$('#r-frente-dd'); if(d.open&&!d.contains(e.target)) d.open=false; });
   $('#btn-xlsx').addEventListener('click',exportarExcel);
   // Modelo de mensagem para os líderes: uma por frente, com as frotas ativas
   function modeloMensagem(f){
@@ -1616,13 +1638,12 @@ img{max-width:100%}
     return L.join('\n');
   }
   function renderModelos(){
-    const fid=$('#r-frente').value, lista=[...(S.frentes||[])].filter(f=>!fid||f.id===fid).filter(f=>(S.frotas||[]).some(v=>v.frenteId===f.id)).sort(byNome);
+    const lista=[...(S.frentes||[])].filter(f=>passaF(f.id)).filter(f=>(S.frotas||[]).some(v=>v.frenteId===f.id)).sort(byNome);
     $('#modelo-lista').innerHTML=lista.length?lista.map(f=>{ const t=modeloMensagem(f); return `<div style="margin-top:12px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b>${esc(f.nome)}</b><span style="display:flex;gap:8px"><button class="btn-ghost btn-sm" data-copiamodelo="${esc(f.id)}" type="button">Copiar</button><a class="btn-primary btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(t)}">Abrir no WhatsApp</a></span></div>
       <textarea readonly rows="${t.split("\n").length+1}" id="modelo-${esc(f.id)}" style="width:100%;margin-top:6px;font-family:ui-monospace,monospace;font-size:.86rem">${esc(t)}</textarea></div>`; }).join(''):'<p class="hint">Nenhuma frente com frotas ativas.</p>';
   }
   $('#btn-modelo').addEventListener('click',()=>{ const b=$('#modelo-box'); b.hidden=!b.hidden; if(!b.hidden){ renderModelos(); b.scrollIntoView({behavior:'smooth',block:'start'}); } });
   $('#btn-modelo-fechar').addEventListener('click',()=>{ $('#modelo-box').hidden=true; });
-  $('#r-frente').addEventListener('change',()=>{ if(!$('#modelo-box').hidden) renderModelos(); });
   $('#modelo-lista').addEventListener('click',async e=>{ const b=e.target.closest('[data-copiamodelo]'); if(!b) return; const ta=document.getElementById('modelo-'+b.dataset.copiamodelo);
     try{ await navigator.clipboard.writeText(ta.value); }catch(_){ ta.select(); document.execCommand('copy'); } const o=b.textContent; b.textContent='Copiado ✓'; setTimeout(()=>b.textContent=o,1800); });
   $('#btn-pdf').addEventListener('click',()=> abaAtual()==='consumo' ? exportarRelatorio() : exportarResumo());
